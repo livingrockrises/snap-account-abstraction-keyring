@@ -7,22 +7,22 @@ import type {
   OnRpcRequestHandler,
 } from '@metamask/snaps-sdk';
 
+import { BiconomyKeyring } from './biconomyKeyring';
 import type { ChainConfig } from './keyring';
-import { AccountAbstractionKeyring } from './keyring';
 import { logger } from './logger';
 import { InternalMethod, originPermissions } from './permissions';
 import { getState } from './stateManagement';
 
-let keyring: AccountAbstractionKeyring;
+let keyring: BiconomyKeyring;
 
 /**
  * Return the keyring instance. If it doesn't exist, create it.
  */
-async function getKeyring(): Promise<AccountAbstractionKeyring> {
+async function getKeyring(): Promise<BiconomyKeyring> {
   if (!keyring) {
     const state = await getState();
     if (!keyring) {
-      keyring = new AccountAbstractionKeyring(state);
+      keyring = new BiconomyKeyring(state);
     }
   }
   return keyring;
@@ -74,7 +74,7 @@ export const onKeyringRequest: OnKeyringRequestHandler = async ({
   origin,
   request,
 }) => {
-  logger.debug(
+  logger.info(
     `Keyring request (origin="${origin}"):`,
     JSON.stringify(request, undefined, 2),
   );

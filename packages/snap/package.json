@@ -42,6 +42,7 @@
     "test": "jest --detectOpenHandles"
   },
   "dependencies": {
+    "@biconomy-devx/account": "2.2.14",
     "@ethereumjs/tx": "^5.1.0",
     "@ethereumjs/util": "^9.0.1",
     "@metamask/keyring-api": "^3.0.0",
@@ -50,7 +51,8 @@
     "@openzeppelin/contracts": "^4.2.0",
     "dotenv": "^16.3.1",
     "ethers": "^6.10.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "viem": "^2.7.3"
   },
   "devDependencies": {
     "@lavamoat/allow-scripts": "^2.0.3",
