@@ -485,7 +485,9 @@ export class AccountAbstractionKeyring implements Keyring {
       dummyPaymasterAndData: getDummyPaymasterAndData(
         verifyingPaymasterAddress,
       ),
-      bundlerUrl: chainConfig?.bundlerUrl ?? '',
+      bundlerUrl:
+        'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f',
+      // 'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f',
     };
     return ethBaseUserOp;
   }
@@ -502,6 +504,8 @@ export class AccountAbstractionKeyring implements Keyring {
     const verifyingPaymasterAddress =
       // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
       chainConfig?.customVerifyingPaymasterAddress!;
+
+    console.log('patch pnd here ', verifyingPaymasterAddress);
 
     if (!verifyingPaymasterAddress) {
       return { paymasterAndData: '0x' };

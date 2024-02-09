@@ -2,7 +2,7 @@
 /* eslint-disable camelcase */
 import {
   createSmartAccountClient,
-  // PaymasterMode,
+  PaymasterMode,
 } from '@biconomy-devx/account';
 import {
   addHexPrefix,
@@ -76,6 +76,31 @@ const unsupportedAAMethods = [
   EthMethod.SignTypedDataV3,
   EthMethod.SignTypedDataV4,
 ];
+
+export type UserOperationStruct = {
+  /* the origin of the request */
+  sender: string;
+  /* nonce of the transaction, returned from the entrypoint for this Address */
+  nonce: number | bigint | `0x${string}`;
+  /* the initCode for creating the sender if it does not exist yet, otherwise "0x" */
+  initCode: Uint8Array | Hex | '0x';
+  /* the callData passed to the target */
+  callData: Uint8Array | Hex;
+  /* Value used by inner account execution */
+  callGasLimit?: number | bigint | `0x${string}`;
+  /* Actual gas used by the validation of this UserOperation */
+  verificationGasLimit?: number | bigint | `0x${string}`;
+  /* Gas overhead of this UserOperation */
+  preVerificationGas?: number | bigint | `0x${string}`;
+  /* Maximum fee per gas (similar to EIP-1559 max_fee_per_gas) */
+  maxFeePerGas?: number | bigint | `0x${string}`;
+  /* Maximum priority fee per gas (similar to EIP-1559 max_priority_fee_per_gas) */
+  maxPriorityFeePerGas?: number | bigint | `0x${string}`;
+  /* Address of paymaster sponsoring the transaction, followed by extra data to send to the paymaster ("0x" for self-sponsored transaction) */
+  paymasterAndData: Uint8Array | Hex | '0x';
+  /* Data passed into the account along with the nonce during the verification step */
+  signature: Uint8Array | Hex;
+};
 
 export type ChainConfig = {
   simpleAccountFactory?: string;
@@ -511,6 +536,8 @@ export class BiconomyKeyring implements Keyring {
       // paymasterServiceData
     ]);
 
+    // console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+
     // TODO: things to discuss
     // 1. We do already have gas limits as this point
     // 2. paymasterAndData can be patched at this point for the verifying paymaster
@@ -525,8 +552,12 @@ export class BiconomyKeyring implements Keyring {
       dummyPaymasterAndData: getDummyPaymasterAndData(
         verifyingPaymasterAddress,
       ), // review
-      bundlerUrl: chainConfig?.bundlerUrl ?? '',
+      // TODO: use biconomy
+      bundlerUrl:
+        'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
     };
+
+    console.log('ethBaseUserOp ', ethBaseUserOp);
     return ethBaseUserOp;
   }
 
@@ -558,59 +589,43 @@ export class BiconomyKeyring implements Keyring {
       await smartAccount.getAccountAddress(),
     );
 
-    const { chainId } = await provider.getNetwork();
-    const chainConfig = this.#getChainConfig(Number(chainId));
+    // Note: types conversion needed from EthUserOperation to Partial<UserOperationStruct>
+    const biconomyBaseUserOp: Partial<UserOperationStruct> = {
+      sender: userOp.sender as Hex,
+      nonce: userOp.nonce as number | bigint | `0x${string}`,
+      initCode: userOp.initCode as Hex,
+      callData: userOp.callData as Hex,
+      callGasLimit: userOp.callGasLimit as Hex,
+      verificationGasLimit: userOp.verificationGasLimit as Hex,
+      preVerificationGas: userOp.preVerificationGas as Hex,
+      maxFeePerGas: userOp.maxFeePerGas as Hex,
+      maxPriorityFeePerGas: userOp.maxPriorityFeePerGas as Hex,
+      paymasterAndData: '0x',
+      signature: userOp.signature as Hex,
+    };
 
-    const verifyingPaymasterAddress =
-      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-      chainConfig?.customVerifyingPaymasterAddress!;
+    try {
+      const useropWithPnd = await smartAccount.getPaymasterUserOp(
+        biconomyBaseUserOp,
+        {
+          mode: PaymasterMode.SPONSORED,
+          calculateGasLimits: false, // Review
+        },
+      );
 
-    let paymasterAndData = '0x';
+      // console.log('useropWithPnd ', useropWithPnd);
 
-    if (!verifyingPaymasterAddress) {
-      return { paymasterAndData: '0x' };
+      return {
+        paymasterAndData: useropWithPnd?.paymasterAndData?.toString() ?? '0x',
+      };
+    } catch (error) {
+      return {
+        paymasterAndData: '0x',
+      };
     }
-
-    // Note: This is local implementation of paymaster signing service
-
-    // TODO: review
-    // This could be done potentially to avoid making calls to paymaster off-chain service
-    // but the paymaster service also does it's own gas estimations and returns more than just paymasterAndData (i.e gas limit values)
-
-    /* const verifyingPaymaster = VerifyingPaymaster__factory.connect(
-      verifyingPaymasterAddress,
-      signer,
-    );
-
-    const verifyingSigner = getSigner(
-      chainConfig?.customVerifyingPaymasterPK ?? wallet.privateKey,
-    );
-
-    // Create a hash that doesn't expire
-    const hash = await verifyingPaymaster.getHash(userOp, 0, 0);
-    const signature = await verifyingSigner.signMessage(ethers.getBytes(hash));
-    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-    const paymasterAndData = `${await verifyingPaymaster.getAddress()}${stripHexPrefix(
-      ethers.AbiCoder.defaultAbiCoder().encode(['uint48', 'uint48'], [0, 0]),
-    )}${stripHexPrefix(signature)}`;*/
-
-    // TODO: types conversion needed from EthUserOperation to Partial<UserOperationStruct>
-    /* const useropWithPnd = await smartAccount.getPaymasterUserOp(userOp, {
-      mode: PaymasterMode.SPONSORED,
-    });
-
-    return {
-      paymasterAndData: useropWithPnd?.paymasterAndData?.toString() ?? '0x',
-    };*/
 
     // TODO: discuss
     // Note: return type is currently fine. but patchUserOperation may return full userop struct with updated gas limits from paymaster
-
-    // reassigning for consistency
-    paymasterAndData = '0x';
-    return {
-      paymasterAndData,
-    };
   }
 
   async #signUserOperation(
@@ -620,29 +635,9 @@ export class BiconomyKeyring implements Keyring {
     const wallet = this.#getWalletByAddress(address);
     const signer = getSigner(wallet.privateKey);
 
-    /* const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: sepolia,
-      transport: http(),
-    });*/
-
     const { chainId } = await provider.getNetwork();
-    // const chainConfig = this.#getChainConfig(Number(chainId));
-    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
 
-    /* const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // sepolia fixed for now
-      biconomyPaymasterApiKey: 'mkwexnsPg.a968d9a7-9738-43be-9c9d-fc77ed8efd2b', // placeholder
-      // index: // saltToInt
-    });*/
-
-    // TODO: types conversion needed from EthUserOperation to Partial<UserOperationStruct>
-    // const userOpWithsignature = await smartAccount.signUserOp(userOp);
-    // return userOpWithsignature.signature;
-
+    // skip usage of Biconomy sdk
     // Note: don't see any harm in this and creating a signature compatible with Biconomy Smart Account V2 (appending ecdsa module address)
     const entryPoint = await this.#getEntryPoint(Number(chainId), signer);
     logger.info(
@@ -667,7 +662,7 @@ export class BiconomyKeyring implements Keyring {
     return finalSignature;
   }
 
-  // Review: Marked for Deletion
+  // Review: (possibly) Marked for Deletion
   async #getAAFactory(chainId: number, signer: ethers.Wallet) {
     if (!this.#isSupportedChain(chainId)) {
       throwError(`[Snap] Unsupported chain ID: ${chainId}`);
@@ -691,7 +686,6 @@ export class BiconomyKeyring implements Keyring {
     return SimpleAccountFactory__factory.connect(factoryAddress, signer);
   }
 
-  // Review: Marked for Deletion
   async #getEntryPoint(chainId: number, signer: ethers.Wallet) {
     if (!this.#isSupportedChain(chainId)) {
       throwError(`[Snap] Unsupported chain ID: ${chainId}`);
