@@ -554,6 +554,7 @@ export class BiconomyKeyring implements Keyring {
       ), // review
       // TODO: use biconomy
       bundlerUrl:
+        // 'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
         'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
     };
 
