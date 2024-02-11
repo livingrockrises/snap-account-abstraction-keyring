@@ -40,7 +40,7 @@ import {
   parseAbiParameters,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { polygonMumbai } from 'viem/chains';
 
 import { DEFAULT_AA_FACTORIES } from './constants/aa-factories';
 import { ECDSA_MODULE_ADDRESS } from './constants/biconomy-addresses';
@@ -225,7 +225,7 @@ export class BiconomyKeyring implements Keyring {
     const signerAccount = privateKeyToAccount(`0x${privateKey}`);
     const client = createWalletClient({
       account: signerAccount,
-      chain: sepolia,
+      chain: polygonMumbai,
       transport: http(),
     });
 
@@ -239,8 +239,8 @@ export class BiconomyKeyring implements Keyring {
     const smartAccount = await createSmartAccountClient({
       signer: client,
       bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // sepolia fixed for now
-      biconomyPaymasterApiKey: 'mkwexnsPg.a968d9a7-9738-43be-9c9d-fc77ed8efd2b', // placeholder
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
     });
 
     const aaAddress = await smartAccount.getAccountAddress();
@@ -509,7 +509,7 @@ export class BiconomyKeyring implements Keyring {
     const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
     const client = createWalletClient({
       account: signerAccount,
-      chain: sepolia,
+      chain: polygonMumbai,
       transport: http(),
     });
 
@@ -519,8 +519,8 @@ export class BiconomyKeyring implements Keyring {
     const smartAccount = await createSmartAccountClient({
       signer: client,
       bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // sepolia fixed for now
-      biconomyPaymasterApiKey: 'mkwexnsPg.a968d9a7-9738-43be-9c9d-fc77ed8efd2b', // placeholder
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
       // index: // saltToInt
     });
 
@@ -554,8 +554,8 @@ export class BiconomyKeyring implements Keyring {
       ), // review
       // TODO: use biconomy
       bundlerUrl:
-        // 'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
-        'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
+        // 'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
+        'https://api.pimlico.io/v1/mumbai/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
     };
 
     console.log('ethBaseUserOp ', ethBaseUserOp);
@@ -571,7 +571,7 @@ export class BiconomyKeyring implements Keyring {
     const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
     const client = createWalletClient({
       account: signerAccount,
-      chain: sepolia,
+      chain: polygonMumbai,
       transport: http(),
     });
 
@@ -581,8 +581,8 @@ export class BiconomyKeyring implements Keyring {
     const smartAccount = await createSmartAccountClient({
       signer: client,
       bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/11155111/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // sepolia fixed for now
-      biconomyPaymasterApiKey: 'mkwexnsPg.a968d9a7-9738-43be-9c9d-fc77ed8efd2b', // placeholder
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
       // index: // saltToInt
     });
     console.log(
