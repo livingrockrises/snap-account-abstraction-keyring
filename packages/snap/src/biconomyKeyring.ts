@@ -607,18 +607,11 @@ export class BiconomyKeyring implements Keyring {
     };
 
     // Review: second call to patch userOp is sending maxFee values 0x0
-    biconomyBaseUserOp.maxFeePerGas =
-      biconomyBaseUserOp.maxFeePerGas === '0x0'
-        ? ('0x' as Hex)
-        : (biconomyBaseUserOp.maxFeePerGas as Hex);
-
-    biconomyBaseUserOp.maxPriorityFeePerGas =
-      biconomyBaseUserOp.maxPriorityFeePerGas === '0x0'
-        ? ('0x' as Hex)
-        : (biconomyBaseUserOp.maxPriorityFeePerGas as Hex);
 
     // TODO: get preferred token from set config
     try {
+      console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+
       // Get paymasterAndData directly if feeTokenAddress is known and it's approval is given
 
       // const useropWithPnd = await smartAccount.getPaymasterAndData(
