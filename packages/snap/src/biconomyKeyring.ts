@@ -556,6 +556,13 @@ export class BiconomyKeyring implements Keyring {
       bundlerUrl:
         // 'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
         'https://api.pimlico.io/v1/mumbai/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
+      gasLimits: {
+        callGasLimit: biconomyBaseUserOp?.callGasLimit?.toString() ?? '0x0',
+        verificationGasLimit:
+          biconomyBaseUserOp?.verificationGasLimit?.toString() ?? '0x0',
+        preVerificationGas:
+          biconomyBaseUserOp?.preVerificationGas?.toString() ?? '0x0',
+      },
     };
 
     console.log('ethBaseUserOp ', ethBaseUserOp);
