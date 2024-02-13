@@ -42,7 +42,7 @@
     "test": "jest --detectOpenHandles"
   },
   "dependencies": {
-    "@biconomy-devx/account": "4.0.1",
+    "@biconomy-devx/account": "4.0.3",
     "@ethereumjs/tx": "^5.1.0",
     "@ethereumjs/util": "^9.0.1",
     "@metamask/keyring-api": "^3.0.0",
