@@ -566,6 +566,7 @@ export class BiconomyKeyring implements Keyring {
     address: string,
     userOp: EthUserOperation,
   ): Promise<EthUserOperationPatch> {
+    console.log('patch userop called here ');
     const wallet = this.#getWalletByAddress(address);
 
     const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
@@ -605,16 +606,29 @@ export class BiconomyKeyring implements Keyring {
       signature: userOp.signature as Hex,
     };
 
+    // Review: second call to patch userOp is sending maxFee values 0x0
+    biconomyBaseUserOp.maxFeePerGas =
+      biconomyBaseUserOp.maxFeePerGas === '0x0'
+        ? ('0x' as Hex)
+        : (biconomyBaseUserOp.maxFeePerGas as Hex);
+
+    biconomyBaseUserOp.maxPriorityFeePerGas =
+      biconomyBaseUserOp.maxPriorityFeePerGas === '0x0'
+        ? ('0x' as Hex)
+        : (biconomyBaseUserOp.maxPriorityFeePerGas as Hex);
+
+    // TODO: get preferred token from set config
     try {
       const useropWithPnd = await smartAccount.getPaymasterUserOp(
         biconomyBaseUserOp,
         {
-          mode: PaymasterMode.SPONSORED,
-          calculateGasLimits: false, // Review
+          mode: PaymasterMode.ERC20,
+          calculateGasLimits: false,
+          preferredToken: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
         },
       );
 
-      // console.log('useropWithPnd ', useropWithPnd);
+      console.log('useropWithPnd ', useropWithPnd);
 
       return {
         paymasterAndData: useropWithPnd?.paymasterAndData?.toString() ?? '0x',
