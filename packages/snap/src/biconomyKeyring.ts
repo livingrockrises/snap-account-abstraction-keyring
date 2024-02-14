@@ -204,6 +204,13 @@ export class BiconomyKeyring implements Keyring {
       throwError(`[Snap] Private Key is required`);
     }*/
 
+
+    //const size = Object.values(this.#state.wallets).length;
+    // If we go with ECDSA module or SA V1 then this is our EOA owner of the SA
+    // const path = `m/44'/60'/0'/0/${size}`;
+    // const entropy = await this.getEntropy();
+    // getKeyPair using entropy and path
+
     const { privateKey, address: admin } = this.#getKeyPair(
       options?.privateKey as string | undefined,
     );
@@ -434,7 +441,7 @@ export class BiconomyKeyring implements Keyring {
       () =>
         privateKey
           ? Buffer.from(hexToBytes(addHexPrefix(privateKey)))
-          : Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
+          : Buffer.from(crypto.getRandomValues(new Uint8Array(32))), // Crypto library to generate random pk and store it
       'Invalid private key',
     );
 

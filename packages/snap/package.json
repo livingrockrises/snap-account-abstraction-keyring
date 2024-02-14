@@ -45,6 +45,7 @@
     "@biconomy-devx/account": "4.0.3",
     "@ethereumjs/tx": "^5.1.0",
     "@ethereumjs/util": "^9.0.1",
+    "@metamask/key-tree": "^9.0.0",
     "@metamask/keyring-api": "^3.0.0",
     "@metamask/snaps-sdk": "^1.4.0",
     "@metamask/utils": "^8.1.0",
