@@ -621,24 +621,24 @@ export class BiconomyKeyring implements Keyring {
 
       // Get paymasterAndData directly if feeTokenAddress is known and it's approval is given
 
-      // const useropWithPnd = await smartAccount.getPaymasterAndData(
+      const useropWithPnd = await smartAccount.getPaymasterAndData(
+        biconomyBaseUserOp,
+        {
+          mode: PaymasterMode.SPONSORED,
+          calculateGasLimits: false,
+          // feeTokenAddress: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
+        },
+      );
+
+      // const useropWithPnd = await smartAccount.getPaymasterUserOp(
       //   biconomyBaseUserOp,
       //   {
       //     mode: PaymasterMode.ERC20,
       //     calculateGasLimits: false,
-      //     feeTokenAddress: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
+      //     preferredToken: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
+      //     // skipPatchCallData: true,
       //   },
       // );
-
-      const useropWithPnd = await smartAccount.getPaymasterUserOp(
-        biconomyBaseUserOp,
-        {
-          mode: PaymasterMode.ERC20,
-          calculateGasLimits: false,
-          preferredToken: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
-          // skipPatchCallData: true,
-        },
-      );
 
       console.log('useropWithPnd ', useropWithPnd);
 
