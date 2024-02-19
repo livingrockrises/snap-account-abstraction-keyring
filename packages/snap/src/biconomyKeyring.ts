@@ -1,10 +1,14 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable camelcase */
 import {
+  createSmartAccountClient,
+  PaymasterMode,
+} from '@biconomy-devx/account';
+import {
   addHexPrefix,
   Address,
   isValidPrivate,
-  stripHexPrefix,
+  // stripHexPrefix,
   toChecksumAddress,
 } from '@ethereumjs/util';
 import type {
@@ -26,11 +30,20 @@ import { KeyringEvent } from '@metamask/keyring-api/dist/events';
 import { type Json, type JsonRpcRequest } from '@metamask/snaps-sdk';
 import { hexToBytes } from '@metamask/utils';
 import { Buffer } from 'buffer';
-import type { BigNumberish } from 'ethers';
-import { ethers } from 'ethers';
+import { ethers, HDNodeWallet, Mnemonic } from 'ethers';
 import { v4 as uuid } from 'uuid';
+import type { Hex } from 'viem';
+import {
+  createWalletClient,
+  encodeAbiParameters,
+  http,
+  parseAbiParameters,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { polygonMumbai } from 'viem/chains';
 
 import { DEFAULT_AA_FACTORIES } from './constants/aa-factories';
+import { ECDSA_MODULE_ADDRESS } from './constants/biconomy-addresses';
 import { CHAIN_IDS } from './constants/chain-ids';
 import {
   DUMMY_SIGNATURE,
@@ -42,9 +55,9 @@ import { InternalMethod } from './permissions';
 import { saveState } from './stateManagement';
 import {
   EntryPoint__factory,
-  SimpleAccount__factory,
+  // SimpleAccount__factory,
   SimpleAccountFactory__factory,
-  VerifyingPaymaster__factory,
+  // VerifyingPaymaster__factory,
 } from './types';
 import { getUserOperationHash } from './utils/ecdsa';
 import { getSigner, provider } from './utils/ethers';
@@ -64,6 +77,31 @@ const unsupportedAAMethods = [
   EthMethod.SignTypedDataV4,
 ];
 
+export type UserOperationStruct = {
+  /* the origin of the request */
+  sender: string;
+  /* nonce of the transaction, returned from the entrypoint for this Address */
+  nonce: number | bigint | `0x${string}`;
+  /* the initCode for creating the sender if it does not exist yet, otherwise "0x" */
+  initCode: Uint8Array | Hex | '0x';
+  /* the callData passed to the target */
+  callData: Uint8Array | Hex;
+  /* Value used by inner account execution */
+  callGasLimit?: number | bigint | `0x${string}`;
+  /* Actual gas used by the validation of this UserOperation */
+  verificationGasLimit?: number | bigint | `0x${string}`;
+  /* Gas overhead of this UserOperation */
+  preVerificationGas?: number | bigint | `0x${string}`;
+  /* Maximum fee per gas (similar to EIP-1559 max_fee_per_gas) */
+  maxFeePerGas?: number | bigint | `0x${string}`;
+  /* Maximum priority fee per gas (similar to EIP-1559 max_priority_fee_per_gas) */
+  maxPriorityFeePerGas?: number | bigint | `0x${string}`;
+  /* Address of paymaster sponsoring the transaction, followed by extra data to send to the paymaster ("0x" for self-sponsored transaction) */
+  paymasterAndData: Uint8Array | Hex | '0x';
+  /* Data passed into the account along with the nonce during the verification step */
+  signature: Uint8Array | Hex;
+};
+
 export type ChainConfig = {
   simpleAccountFactory?: string;
   entryPoint?: string;
@@ -82,17 +120,25 @@ export type Wallet = {
   account: KeyringAccount;
   admin: string;
   privateKey: string;
+  guardianId: string;
+  // Review : timeframes and delay can be added
   chains: Record<string, boolean>;
   salt: string;
   initCode: string;
 };
 
-export class AccountAbstractionKeyring implements Keyring {
+export class BiconomyKeyring implements Keyring {
   #state: KeyringState;
 
   constructor(state: KeyringState) {
     this.#state = state;
   }
+
+  // custom methods
+
+  // setAccountRecovery
+
+  // issue session key
 
   async setConfig(config: ChainConfig): Promise<ChainConfig> {
     const { chainId } = await provider.getNetwork();
@@ -101,14 +147,14 @@ export class AccountAbstractionKeyring implements Keyring {
       !ethers.isAddress(config.simpleAccountFactory)
     ) {
       throwError(
-        `[Snap] Invalid Simple Account Factory Address: ${String(
-          config.simpleAccountFactory,
-        )}`,
+        `[Snap] Invalid Simple Account Factory Address: ${
+          config.simpleAccountFactory as string
+        }`,
       );
     }
     if (config.entryPoint && !ethers.isAddress(config.entryPoint)) {
       throwError(
-        `[Snap] Invalid EntryPoint Address: ${String(config.entryPoint)}`,
+        `[Snap] Invalid EntryPoint Address: ${config.entryPoint as string}`,
       );
     }
     if (
@@ -116,13 +162,13 @@ export class AccountAbstractionKeyring implements Keyring {
       !ethers.isAddress(config.customVerifyingPaymasterAddress)
     ) {
       throwError(
-        `[Snap] Invalid Verifying Paymaster Address: ${String(
-          config.customVerifyingPaymasterAddress,
-        )}`,
+        `[Snap] Invalid Verifying Paymaster Address: ${
+          config.customVerifyingPaymasterAddress as string
+        }`,
       );
     }
     const bundlerUrlRegex =
-      /^(https?:\/\/)?[\w\\.-]+(:\d{2,6})?(\/[\\/\w \\.-]*)?(\?[\\/\w .\-=]*)?$/u;
+      /^(https?:\/\/)?[\w\\.-]+(:\d{2,6})?(\/[\\/\w \\.-]*)?$/u;
     if (config.bundlerUrl && !bundlerUrlRegex.test(config.bundlerUrl)) {
       throwError(`[Snap] Invalid Bundler URL: ${config.bundlerUrl}`);
     }
@@ -151,6 +197,16 @@ export class AccountAbstractionKeyring implements Keyring {
     return Object.values(this.#state.wallets).map((wallet) => wallet.account);
   }
 
+  async getEntropy(): Promise<string> {
+    return snap.request({
+      method: 'snap_getEntropy',
+      params: {
+        version: 1,
+        salt: 'bar',
+      },
+    });
+  }
+
   async getAccount(id: string): Promise<KeyringAccount> {
     return (
       this.#state.wallets[id]?.account ??
@@ -161,13 +217,20 @@ export class AccountAbstractionKeyring implements Keyring {
   async createAccount(
     options: Record<string, Json> = {},
   ): Promise<KeyringAccount> {
-    if (!options.privateKey) {
+    // Input private key from the user should not be necessary to create an account
+    /* if (!options.privateKey) {
       throwError(`[Snap] Private Key is required`);
-    }
+    }*/
 
-    const { privateKey, address: admin } = this.#getKeyPair(
-      options?.privateKey as string | undefined,
-    );
+    const size = Object.values(this.#state.wallets).length;
+
+    // If we go with ECDSA module or SA V1 then this is our EOA owner of the SA
+    const path = `m/44'/60'/0'/0/${size}`;
+    const entropy = await this.getEntropy();
+
+    const { privateKey, address: admin } = this.#getKeyPair(entropy, path);
+
+    console.log('[KEYRING] EOA address', admin);
 
     if (!isUniqueAddress(admin, Object.values(this.#state.wallets))) {
       throw new Error(`Account address already in use: ${admin}`);
@@ -180,23 +243,31 @@ export class AccountAbstractionKeyring implements Keyring {
     }
 
     const { chainId } = await provider.getNetwork();
-    const signer = getSigner(privateKey);
 
-    // get factory contract by chain
-    const aaFactory = await this.#getAAFactory(Number(chainId), signer);
-    logger.info('[Snap] AA Factory Contract Address: ', aaFactory.target);
+    // const chainConfig = this.#getChainConfig(Number(chainId));
+
+    const signerAccount = privateKeyToAccount(privateKey as Hex);
+    const client = createWalletClient({
+      account: signerAccount,
+      chain: polygonMumbai,
+      transport: http(),
+    });
 
     const random = ethers.toBigInt(ethers.randomBytes(32));
+
     const salt =
       (options.salt as string) ??
       ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [random]);
 
-    const aaAddress = await aaFactory.getAccountAddress(admin, salt);
+    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
+    const smartAccount = await createSmartAccountClient({
+      signer: client,
+      bundlerUrl:
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+    });
 
-    const initCode = ethers.concat([
-      aaFactory.target as string,
-      aaFactory.interface.encodeFunctionData('createAccount', [admin, salt]),
-    ]);
+    const aaAddress = await smartAccount.getAccountAddress();
 
     // check on chain if the account already exists.
     // if it does, this means that there is a collision in the salt used.
@@ -231,12 +302,14 @@ export class AccountAbstractionKeyring implements Keyring {
         account,
         admin, // Address of the admin account from private key
         privateKey,
+        guardianId: (options.guardianId as Hex) || '',
         chains: { [chainId.toString()]: false },
         salt,
-        initCode,
+        initCode: '0x',
       };
       await this.#emitEvent(KeyringEvent.AccountCreated, { account });
       await this.#saveState();
+      console.log('[SNAP] Account created', account.address);
       return account;
     } catch (error) {
       throw new Error((error as Error).message);
@@ -371,28 +444,40 @@ export class AccountAbstractionKeyring implements Keyring {
     return match ?? throwError(`Account '${address}' not found`);
   }
 
-  #getKeyPair(privateKey?: string): {
+  // TODO:
+  // can be several approaches to derive private key
+  // 1. generate random private key
+  // 2. derive from private key of first metamask eoa account
+  // 3. generate entropy
+  // 4.
+
+  #getKeyPair(
+    entropy: string,
+    path: string,
+  ): {
     privateKey: string;
     address: string;
   } {
-    const privateKeyBuffer: Buffer = runSensitive(
-      () =>
-        privateKey
-          ? Buffer.from(hexToBytes(addHexPrefix(privateKey)))
-          : // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore - available in snaps
-            Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
-      'Invalid private key',
-    );
+    // const privateKeyBuffer: Buffer = runSensitive(
+    //   () =>
+    //    Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
+    //   'Invalid private key',
+    // );
 
-    if (!isValidPrivate(privateKeyBuffer)) {
-      throw new Error('Invalid private key');
-    }
+    const mnemonic = Mnemonic.fromEntropy(entropy);
+    const childWallet = HDNodeWallet.fromMnemonic(mnemonic, path);
 
-    const address = toChecksumAddress(
-      Address.fromPrivateKey(privateKeyBuffer).toString(),
-    );
-    return { privateKey: privateKeyBuffer.toString('hex'), address };
+    // if (!isValidPrivate(privateKeyBuffer)) {
+    //   throw new Error('Invalid private key');
+    // }
+
+    // const address = toChecksumAddress(
+    //   Address.fromPrivateKey(privateKeyBuffer).toString(),
+    // );
+    return {
+      privateKey: childWallet.privateKey.toString(),
+      address: childWallet.address,
+    };
   }
 
   async #handleSigningRequest({
@@ -449,51 +534,70 @@ export class AccountAbstractionKeyring implements Keyring {
     );
 
     const wallet = this.#getWalletByAddress(address);
-    const signer = getSigner(wallet.privateKey);
-
-    // eslint-disable-next-line camelcase
-    const aaInstance = SimpleAccount__factory.connect(
-      wallet.account.address, // AA address
-      signer, // Admin signer
-    );
 
     const { chainId } = await provider.getNetwork();
-
-    let nonce = '0x0';
-    let initCode = '0x';
-    try {
-      nonce = `0x${((await aaInstance.getNonce()) as BigNumberish).toString(
-        16,
-      )}`;
-      if (!wallet.chains[chainId.toString()]) {
-        wallet.chains[chainId.toString()] = true;
-        await this.#saveState();
-      }
-    } catch (error) {
-      initCode = wallet.initCode;
-    }
-
     const chainConfig = this.#getChainConfig(Number(chainId));
+
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
+    const client = createWalletClient({
+      account: signerAccount,
+      chain: polygonMumbai,
+      transport: http(),
+    });
+
+    // If the salt was used to create an account, we would need the salt from the state.
+
+    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
+    const smartAccount = await createSmartAccountClient({
+      signer: client,
+      bundlerUrl:
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      // index: // saltToInt
+    });
 
     const verifyingPaymasterAddress =
       chainConfig?.customVerifyingPaymasterAddress;
 
+    const biconomyBaseUserOp = await smartAccount.buildUserOp([
+      {
+        to: transaction.to ?? ethers.ZeroAddress,
+        value: transaction.value ?? '0x0',
+        data: transaction.data ?? ethers.ZeroHash,
+      },
+      // paymasterServiceData
+    ]);
+
+    // console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+
+    // TODO: things to discuss
+    // 1. We do already have gas limits as this point
+    // 2. paymasterAndData can be patched at this point for the verifying paymaster
+    // 3. dummyPaymasterAndData is perhpas not necessary and can be sent 0x for using biconomy paymaster
+
     const ethBaseUserOp: EthBaseUserOperation = {
-      nonce,
-      initCode,
-      callData: aaInstance.interface.encodeFunctionData('execute', [
-        transaction.to ?? ethers.ZeroAddress,
-        transaction.value ?? '0x00',
-        transaction.data ?? ethers.ZeroHash,
-      ]),
-      dummySignature: DUMMY_SIGNATURE,
+      nonce: biconomyBaseUserOp?.nonce?.toString() ?? '0x00',
+      initCode: biconomyBaseUserOp?.initCode?.toString() ?? '0x',
+      callData: biconomyBaseUserOp?.callData?.toString() ?? '0x',
+      dummySignature:
+        biconomyBaseUserOp?.signature?.toString() ?? DUMMY_SIGNATURE,
       dummyPaymasterAndData: getDummyPaymasterAndData(
         verifyingPaymasterAddress,
-      ),
+      ), // review
+      // TODO: use biconomy
       bundlerUrl:
-        'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f',
-      // 'https://api.pimlico.io/v1/sepolia/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f',
+        // 'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
+        'https://api.pimlico.io/v1/mumbai/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
+      gasLimits: {
+        callGasLimit: biconomyBaseUserOp?.callGasLimit?.toString() ?? '0x0',
+        verificationGasLimit:
+          biconomyBaseUserOp?.verificationGasLimit?.toString() ?? '0x0',
+        preVerificationGas:
+          biconomyBaseUserOp?.preVerificationGas?.toString() ?? '0x0',
+      },
     };
+
+    console.log('ethBaseUserOp ', ethBaseUserOp);
     return ethBaseUserOp;
   }
 
@@ -501,41 +605,86 @@ export class AccountAbstractionKeyring implements Keyring {
     address: string,
     userOp: EthUserOperation,
   ): Promise<EthUserOperationPatch> {
+    console.log('patch userop called here ');
     const wallet = this.#getWalletByAddress(address);
-    const signer = getSigner(wallet.privateKey);
-    const { chainId } = await provider.getNetwork();
-    const chainConfig = this.#getChainConfig(Number(chainId));
 
-    const verifyingPaymasterAddress =
-      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-      chainConfig?.customVerifyingPaymasterAddress!;
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
+    const client = createWalletClient({
+      account: signerAccount,
+      chain: polygonMumbai,
+      transport: http(),
+    });
 
-    console.log('patch pnd here ', verifyingPaymasterAddress);
+    console.log('userOp coming from upstream ', userOp);
 
-    if (!verifyingPaymasterAddress) {
-      return { paymasterAndData: '0x' };
+    // TODO : make this a helper function or bring from the state if allowed
+    const smartAccount = await createSmartAccountClient({
+      signer: client,
+      bundlerUrl:
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      // index: // saltToInt
+    });
+    console.log(
+      'smartAccount address ',
+      await smartAccount.getAccountAddress(),
+    );
+
+    // Note: types conversion needed from EthUserOperation to Partial<UserOperationStruct>
+    const biconomyBaseUserOp: Partial<UserOperationStruct> = {
+      sender: userOp.sender as Hex,
+      nonce: userOp.nonce as number | bigint | `0x${string}`,
+      initCode: userOp.initCode as Hex,
+      callData: userOp.callData as Hex,
+      callGasLimit: userOp.callGasLimit as Hex,
+      verificationGasLimit: userOp.verificationGasLimit as Hex,
+      preVerificationGas: userOp.preVerificationGas as Hex,
+      maxFeePerGas: userOp.maxFeePerGas as Hex,
+      maxPriorityFeePerGas: userOp.maxPriorityFeePerGas as Hex,
+      paymasterAndData: '0x',
+      signature: userOp.signature as Hex,
+    };
+
+    // Review: second call to patch userOp is sending maxFee values 0x0
+
+    // TODO: get preferred token from set config
+    try {
+      console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+
+      // Get paymasterAndData directly if feeTokenAddress is known and it's approval is given
+
+      const useropWithPnd = await smartAccount.getPaymasterAndData(
+        biconomyBaseUserOp,
+        {
+          mode: PaymasterMode.SPONSORED,
+          calculateGasLimits: false,
+          // feeTokenAddress: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
+        },
+      );
+
+      // const useropWithPnd = await smartAccount.getPaymasterUserOp(
+      //   biconomyBaseUserOp,
+      //   {
+      //     mode: PaymasterMode.ERC20,
+      //     calculateGasLimits: false,
+      //     preferredToken: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
+      //     // skipPatchCallData: true,
+      //   },
+      // );
+
+      console.log('useropWithPnd ', useropWithPnd);
+
+      return {
+        paymasterAndData: useropWithPnd?.paymasterAndData?.toString() ?? '0x',
+      };
+    } catch (error) {
+      return {
+        paymasterAndData: '0x',
+      };
     }
 
-    const verifyingPaymaster = VerifyingPaymaster__factory.connect(
-      verifyingPaymasterAddress,
-      signer,
-    );
-
-    const verifyingSigner = getSigner(
-      chainConfig?.customVerifyingPaymasterPK ?? wallet.privateKey,
-    );
-
-    // Create a hash that doesn't expire
-    const hash = await verifyingPaymaster.getHash(userOp, 0, 0);
-    const signature = await verifyingSigner.signMessage(ethers.getBytes(hash));
-    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-    const paymasterAndData = `${await verifyingPaymaster.getAddress()}${stripHexPrefix(
-      ethers.AbiCoder.defaultAbiCoder().encode(['uint48', 'uint48'], [0, 0]),
-    )}${stripHexPrefix(signature)}`;
-
-    return {
-      paymasterAndData,
-    };
+    // TODO: discuss
+    // Note: return type is currently fine. but patchUserOperation may return full userop struct with updated gas limits from paymaster
   }
 
   async #signUserOperation(
@@ -544,7 +693,11 @@ export class AccountAbstractionKeyring implements Keyring {
   ): Promise<string> {
     const wallet = this.#getWalletByAddress(address);
     const signer = getSigner(wallet.privateKey);
+
     const { chainId } = await provider.getNetwork();
+
+    // skip usage of Biconomy sdk
+    // Note: don't see any harm in this and creating a signature compatible with Biconomy Smart Account V2 (appending ecdsa module address)
     const entryPoint = await this.#getEntryPoint(Number(chainId), signer);
     logger.info(
       `[Snap] SignUserOperation:\n${JSON.stringify(userOp, null, 2)}`,
@@ -560,9 +713,15 @@ export class AccountAbstractionKeyring implements Keyring {
 
     const signature = await signer.signMessage(ethers.getBytes(userOpHash));
 
-    return signature;
+    const finalSignature = encodeAbiParameters(
+      parseAbiParameters('bytes, address'),
+      [signature as Hex, ECDSA_MODULE_ADDRESS],
+    );
+
+    return finalSignature;
   }
 
+  // Review: (possibly) Marked for Deletion
   async #getAAFactory(chainId: number, signer: ethers.Wallet) {
     if (!this.#isSupportedChain(chainId)) {
       throwError(`[Snap] Unsupported chain ID: ${chainId}`);
