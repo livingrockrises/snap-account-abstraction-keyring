@@ -30,7 +30,7 @@ import { KeyringEvent } from '@metamask/keyring-api/dist/events';
 import { type Json, type JsonRpcRequest } from '@metamask/snaps-sdk';
 import { hexToBytes } from '@metamask/utils';
 import { Buffer } from 'buffer';
-import { ethers } from 'ethers';
+import { ethers, HDNodeWallet, Mnemonic } from 'ethers';
 import { v4 as uuid } from 'uuid';
 import type { Hex } from 'viem';
 import {
@@ -120,6 +120,8 @@ export type Wallet = {
   account: KeyringAccount;
   admin: string;
   privateKey: string;
+  guardianId: string;
+  // Review : timeframes and delay can be added
   chains: Record<string, boolean>;
   salt: string;
   initCode: string;
@@ -131,6 +133,12 @@ export class BiconomyKeyring implements Keyring {
   constructor(state: KeyringState) {
     this.#state = state;
   }
+
+  // custom methods
+
+  // setAccountRecovery
+
+  // issue session key
 
   async setConfig(config: ChainConfig): Promise<ChainConfig> {
     const { chainId } = await provider.getNetwork();
@@ -189,6 +197,16 @@ export class BiconomyKeyring implements Keyring {
     return Object.values(this.#state.wallets).map((wallet) => wallet.account);
   }
 
+  async getEntropy(): Promise<string> {
+    return snap.request({
+      method: 'snap_getEntropy',
+      params: {
+        version: 1,
+        salt: 'bar',
+      },
+    });
+  }
+
   async getAccount(id: string): Promise<KeyringAccount> {
     return (
       this.#state.wallets[id]?.account ??
@@ -204,9 +222,15 @@ export class BiconomyKeyring implements Keyring {
       throwError(`[Snap] Private Key is required`);
     }*/
 
-    const { privateKey, address: admin } = this.#getKeyPair(
-      options?.privateKey as string | undefined,
-    );
+    const size = Object.values(this.#state.wallets).length;
+
+    // If we go with ECDSA module or SA V1 then this is our EOA owner of the SA
+    const path = `m/44'/60'/0'/0/${size}`;
+    const entropy = await this.getEntropy();
+
+    const { privateKey, address: admin } = this.#getKeyPair(entropy, path);
+
+    console.log('[KEYRING] EOA address', admin);
 
     if (!isUniqueAddress(admin, Object.values(this.#state.wallets))) {
       throw new Error(`Account address already in use: ${admin}`);
@@ -222,7 +246,7 @@ export class BiconomyKeyring implements Keyring {
 
     // const chainConfig = this.#getChainConfig(Number(chainId));
 
-    const signerAccount = privateKeyToAccount(`0x${privateKey}`);
+    const signerAccount = privateKeyToAccount(privateKey as Hex);
     const client = createWalletClient({
       account: signerAccount,
       chain: polygonMumbai,
@@ -278,6 +302,7 @@ export class BiconomyKeyring implements Keyring {
         account,
         admin, // Address of the admin account from private key
         privateKey,
+        guardianId: (options.guardianId as Hex) || '',
         chains: { [chainId.toString()]: false },
         salt,
         initCode: '0x',
@@ -426,26 +451,33 @@ export class BiconomyKeyring implements Keyring {
   // 3. generate entropy
   // 4.
 
-  #getKeyPair(privateKey?: string): {
+  #getKeyPair(
+    entropy: string,
+    path: string,
+  ): {
     privateKey: string;
     address: string;
   } {
-    const privateKeyBuffer: Buffer = runSensitive(
-      () =>
-        privateKey
-          ? Buffer.from(hexToBytes(addHexPrefix(privateKey)))
-          : Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
-      'Invalid private key',
-    );
+    // const privateKeyBuffer: Buffer = runSensitive(
+    //   () =>
+    //    Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
+    //   'Invalid private key',
+    // );
 
-    if (!isValidPrivate(privateKeyBuffer)) {
-      throw new Error('Invalid private key');
-    }
+    const mnemonic = Mnemonic.fromEntropy(entropy);
+    const childWallet = HDNodeWallet.fromMnemonic(mnemonic, path);
 
-    const address = toChecksumAddress(
-      Address.fromPrivateKey(privateKeyBuffer).toString(),
-    );
-    return { privateKey: privateKeyBuffer.toString('hex'), address };
+    // if (!isValidPrivate(privateKeyBuffer)) {
+    //   throw new Error('Invalid private key');
+    // }
+
+    // const address = toChecksumAddress(
+    //   Address.fromPrivateKey(privateKeyBuffer).toString(),
+    // );
+    return {
+      privateKey: childWallet.privateKey.toString(),
+      address: childWallet.address,
+    };
   }
 
   async #handleSigningRequest({
@@ -506,7 +538,7 @@ export class BiconomyKeyring implements Keyring {
     const { chainId } = await provider.getNetwork();
     const chainConfig = this.#getChainConfig(Number(chainId));
 
-    const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
     const client = createWalletClient({
       account: signerAccount,
       chain: polygonMumbai,
@@ -576,7 +608,7 @@ export class BiconomyKeyring implements Keyring {
     console.log('patch userop called here ');
     const wallet = this.#getWalletByAddress(address);
 
-    const signerAccount = privateKeyToAccount(`0x${wallet.privateKey}`);
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
     const client = createWalletClient({
       account: signerAccount,
       chain: polygonMumbai,

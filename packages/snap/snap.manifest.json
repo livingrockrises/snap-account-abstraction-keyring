@@ -7,7 +7,7 @@
     "url": "git+https://github.com/MetaMask/snap-account-abstraction-keyring.git"
   },
   "source": {
-    "shasum": "pt02N6pkR03Z5R//e9KzAHQG4DDycIHqqzfC2LXedTA=",
+    "shasum": "xhcjVgu6j4FyMHI6jcOO5lflO037MjbgzmzS+CIyRZw=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
@@ -31,7 +31,9 @@
     "snap_manageAccounts": {},
     "snap_manageState": {},
     "endowment:ethereum-provider": {},
-    "endowment:network-access": {}
+    "endowment:network-access": {},
+    "snap_getEntropy": {},
+    "snap_dialog": {}
   },
   "manifestVersion": "0.1"
 }

@@ -2,9 +2,14 @@ import {
   MethodNotSupportedError,
   handleKeyringRequest,
 } from '@metamask/keyring-api';
-import type {
-  OnKeyringRequestHandler,
-  OnRpcRequestHandler,
+import {
+  panel,
+  type OnKeyringRequestHandler,
+  type OnRpcRequestHandler,
+  heading,
+  divider,
+  text,
+  DialogType,
 } from '@metamask/snaps-sdk';
 
 import { BiconomyKeyring } from './biconomyKeyring';
@@ -28,6 +33,31 @@ async function getKeyring(): Promise<BiconomyKeyring> {
   return keyring;
 }
 
+export const promptUser = async (
+  prompt: string,
+  description: string,
+  content: string,
+): Promise<boolean> => {
+  const response: any = await snap.request({
+    method: 'snap_dialog',
+    params: {
+      type: DialogType.Confirmation,
+      content: panel([
+        heading('Transaction request'),
+        divider(),
+        text(`**${prompt}**`),
+        text(`${description}`),
+        text(`${content}`),
+      ]),
+    },
+  });
+  console.log('Prompt user response', response);
+  if (response) {
+    return response;
+  }
+  return false;
+};
+
 /**
  * Verify if the caller can call the requested method.
  *
@@ -37,6 +67,19 @@ async function getKeyring(): Promise<BiconomyKeyring> {
  */
 function hasPermission(origin: string, method: string): boolean {
   return originPermissions.get(origin)?.includes(method) ?? false;
+}
+
+/**
+ *
+ */
+async function getEntropy() {
+  return snap.request({
+    method: 'snap_getEntropy',
+    params: {
+      version: 1,
+      salt: 'bar',
+    },
+  });
 }
 
 export const onRpcRequest: OnRpcRequestHandler = async ({
@@ -63,6 +106,36 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
       }
       return (await getKeyring()).setConfig(request.params as ChainConfig);
     }
+
+    case 'genPk':
+      {
+        // https://docs.metamask.io/snaps/reference/rpc-api/#snap_dialog
+
+        const entropy = await getEntropy();
+        console.log('entropy', entropy);
+
+        const feeTokenChoice = await snap.request({
+          method: 'snap_dialog',
+          params: {
+            type: 'prompt',
+            content: panel([
+              heading('Choose Gas Token to Pay with'),
+              text('1 USDC'),
+              text('2 USDT'),
+              text('3 DAI'),
+              divider(),
+              text(
+                'For gas fees in ERC20  you need to have tokens in your Smart Wallet',
+              ),
+            ]),
+            placeholder: 'Choose 1, 2 or 3',
+          },
+        });
+
+        console.log('fee token', feeTokenChoice);
+      }
+
+      break;
 
     default: {
       throw new MethodNotSupportedError(request.method);
