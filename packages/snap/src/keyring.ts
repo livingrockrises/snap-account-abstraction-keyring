@@ -26,6 +26,7 @@ import { KeyringEvent } from '@metamask/keyring-api/dist/events';
 import { type Json, type JsonRpcRequest } from '@metamask/snaps-sdk';
 import { hexToBytes } from '@metamask/utils';
 import { Buffer } from 'buffer';
+import type { BigNumberish } from 'ethers';
 import { ethers } from 'ethers';
 import { v4 as uuid } from 'uuid';
 
@@ -100,14 +101,14 @@ export class AccountAbstractionKeyring implements Keyring {
       !ethers.isAddress(config.simpleAccountFactory)
     ) {
       throwError(
-        `[Snap] Invalid Simple Account Factory Address: ${
-          config.simpleAccountFactory as string
-        }`,
+        `[Snap] Invalid Simple Account Factory Address: ${String(
+          config.simpleAccountFactory,
+        )}`,
       );
     }
     if (config.entryPoint && !ethers.isAddress(config.entryPoint)) {
       throwError(
-        `[Snap] Invalid EntryPoint Address: ${config.entryPoint as string}`,
+        `[Snap] Invalid EntryPoint Address: ${String(config.entryPoint)}`,
       );
     }
     if (
@@ -115,13 +116,13 @@ export class AccountAbstractionKeyring implements Keyring {
       !ethers.isAddress(config.customVerifyingPaymasterAddress)
     ) {
       throwError(
-        `[Snap] Invalid Verifying Paymaster Address: ${
-          config.customVerifyingPaymasterAddress as string
-        }`,
+        `[Snap] Invalid Verifying Paymaster Address: ${String(
+          config.customVerifyingPaymasterAddress,
+        )}`,
       );
     }
     const bundlerUrlRegex =
-      /^(https?:\/\/)?[\w\\.-]+(:\d{2,6})?(\/[\\/\w \\.-]*)?$/u;
+      /^(https?:\/\/)?[\w\\.-]+(:\d{2,6})?(\/[\\/\w \\.-]*)?(\?[\\/\w .\-=]*)?$/u;
     if (config.bundlerUrl && !bundlerUrlRegex.test(config.bundlerUrl)) {
       throwError(`[Snap] Invalid Bundler URL: ${config.bundlerUrl}`);
     }
@@ -378,7 +379,9 @@ export class AccountAbstractionKeyring implements Keyring {
       () =>
         privateKey
           ? Buffer.from(hexToBytes(addHexPrefix(privateKey)))
-          : Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
+          : // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - available in snaps
+            Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
       'Invalid private key',
     );
 
@@ -459,7 +462,9 @@ export class AccountAbstractionKeyring implements Keyring {
     let nonce = '0x0';
     let initCode = '0x';
     try {
-      nonce = `0x${(await aaInstance.getNonce()).toString(16)}`;
+      nonce = `0x${((await aaInstance.getNonce()) as BigNumberish).toString(
+        16,
+      )}`;
       if (!wallet.chains[chainId.toString()]) {
         wallet.chains[chainId.toString()] = true;
         await this.#saveState();
