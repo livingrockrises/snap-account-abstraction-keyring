@@ -27,15 +27,24 @@ import {
   EthMethod,
 } from '@metamask/keyring-api';
 import { KeyringEvent } from '@metamask/keyring-api/dist/events';
-import { type Json, type JsonRpcRequest } from '@metamask/snaps-sdk';
+import {
+  panel,
+  type Json,
+  type JsonRpcRequest,
+  heading,
+  divider,
+  text,
+} from '@metamask/snaps-sdk';
 import { hexToBytes } from '@metamask/utils';
 import { Buffer } from 'buffer';
 import { ethers, HDNodeWallet, Mnemonic } from 'ethers';
+import { encode } from 'punycode';
 import { v4 as uuid } from 'uuid';
 import type { Hex } from 'viem';
 import {
   createWalletClient,
   encodeAbiParameters,
+  encodeFunctionData,
   http,
   parseAbiParameters,
 } from 'viem';
@@ -43,7 +52,10 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { polygonMumbai } from 'viem/chains';
 
 import { DEFAULT_AA_FACTORIES } from './constants/aa-factories';
-import { ECDSA_MODULE_ADDRESS } from './constants/biconomy-addresses';
+import {
+  ACCOUNT_RECOVERY_MODULE_ADDRESS,
+  ECDSA_MODULE_ADDRESS,
+} from './constants/biconomy-addresses';
 import { CHAIN_IDS } from './constants/chain-ids';
 import {
   DUMMY_SIGNATURE,
@@ -59,6 +71,8 @@ import {
   SimpleAccountFactory__factory,
   // VerifyingPaymaster__factory,
 } from './types';
+import { BiconomyAccountRecoveryAbi } from './utils/abi/BiconomyAccountRecoveryAbi';
+import { BiconomyImplementationAbi } from './utils/abi/BiconomyImplementationAbi';
 import { getUserOperationHash } from './utils/ecdsa';
 import { getSigner, provider } from './utils/ethers';
 import {
@@ -110,10 +124,27 @@ export type ChainConfig = {
   customVerifyingPaymasterAddress?: string;
 };
 
+export type GuardianConfig = {
+  guardianId: string;
+  accountAddress: string;
+};
+
+export type AccountRecoverySettings = {
+  guardianId: string;
+  accountAddress: string;
+  validUntil: number;
+  securityDelay: number;
+  numRecoveries: number;
+};
+
 export type KeyringState = {
   wallets: Record<string, Wallet>;
   pendingRequests: Record<string, KeyringRequest>;
   config: Record<number, ChainConfig>;
+};
+
+export type TransactionDetails = {
+  userOpHash: string;
 };
 
 export type Wallet = {
@@ -139,6 +170,117 @@ export class BiconomyKeyring implements Keyring {
   // setAccountRecovery
 
   // issue session key
+
+  async setGuardianIdForAccount(
+    guardianConfig: GuardianConfig,
+  ): Promise<KeyringAccount> {
+    const wallet = Object.values(this.#state.wallets).find(
+      // eslint-disable-next-line id-length
+      (w) => w.account.address === guardianConfig.accountAddress,
+    );
+
+    if (!wallet) {
+      throwError(`[Snap] Account '${guardianConfig.accountAddress}' not found`);
+    }
+    wallet.guardianId = guardianConfig.guardianId;
+
+    this.#state.wallets[wallet.account.id] = wallet;
+
+    await this.#saveState();
+    return this.#state.wallets[wallet.account.id]!.account;
+  }
+
+  async setAccountRecovery(
+    accountRecoverySettings: AccountRecoverySettings,
+  ): Promise<TransactionDetails> {
+    const wallet = this.#getWalletByAddress(
+      accountRecoverySettings.accountAddress,
+    );
+
+    console.log('recovery setup here ', wallet.guardianId);
+
+    if (!wallet) {
+      throwError(
+        `[Snap] Account '${accountRecoverySettings.accountAddress}' not found`,
+      );
+    }
+
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
+    const client = createWalletClient({
+      account: signerAccount,
+      chain: polygonMumbai,
+      transport: http(),
+    });
+
+    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
+    const smartAccount = await createSmartAccountClient({
+      signer: client,
+      bundlerUrl:
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      // index: // saltToInt
+    });
+
+    const { validUntil } = accountRecoverySettings;
+    console.log('validUntil ', validUntil);
+
+    const accountRecoverySetupData = encodeFunctionData({
+      abi: BiconomyAccountRecoveryAbi,
+      functionName: 'initForSmartAccount',
+      args: [
+        [accountRecoverySettings.guardianId as Hex],
+        [
+          {
+            validUntil,
+            validAfter: 0,
+          },
+        ],
+        1,
+        accountRecoverySettings.securityDelay,
+        accountRecoverySettings.numRecoveries,
+      ],
+    });
+
+    console.log('accountRecoverySetupData ', accountRecoverySetupData);
+
+    const setupAndEnableModuleData = encodeFunctionData({
+      abi: BiconomyImplementationAbi,
+      functionName: 'setupAndEnableModule',
+      args: [ACCOUNT_RECOVERY_MODULE_ADDRESS, accountRecoverySetupData],
+    });
+
+    console.log('setupAndEnableModuleData ', setupAndEnableModuleData);
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const { waitForTxHash } = await smartAccount.sendTransaction(
+      {
+        to: await smartAccount.getAccountAddress(),
+        value: '0x0',
+        data: setupAndEnableModuleData,
+      },
+      { paymasterServiceData: { mode: PaymasterMode.SPONSORED } },
+    );
+    const { transactionHash } = await waitForTxHash();
+    console.log('transactionHash ', transactionHash);
+    if (transactionHash) {
+      await snap.request({
+        method: 'snap_dialog',
+        params: {
+          type: 'confirmation',
+          content: panel([
+            heading('Transaction sent'),
+            divider(),
+            text(`Transaction hash :`),
+            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+            text(`**${transactionHash}**`),
+          ]),
+        },
+      });
+    }
+    return {
+      userOpHash: transactionHash ?? '',
+    };
+  }
 
   async setConfig(config: ChainConfig): Promise<ChainConfig> {
     const { chainId } = await provider.getNetwork();
@@ -202,7 +344,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'bar',
+        salt: 'foofoo',
       },
     });
   }
@@ -413,6 +555,24 @@ export class BiconomyKeyring implements Keyring {
       return {
         pending: false,
         result: await this.setConfig((params as [ChainConfig])[0]),
+      };
+    }
+
+    if (method === 'snap.internal.setGuardianId') {
+      return {
+        pending: false,
+        result: await this.setGuardianIdForAccount(
+          (params as [GuardianConfig])[0],
+        ),
+      };
+    }
+
+    if (method === 'snap.account.setRecovery') {
+      return {
+        pending: false,
+        result: await this.setAccountRecovery(
+          (params as [AccountRecoverySettings])[0],
+        ),
       };
     }
 
