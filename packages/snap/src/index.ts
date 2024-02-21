@@ -77,7 +77,7 @@ async function getEntropy() {
     method: 'snap_getEntropy',
     params: {
       version: 1,
-      salt: 'foofoo',
+      salt: 'foofoobarbar',
     },
   });
 }
@@ -110,31 +110,9 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
     case 'genPk':
       {
         // https://docs.metamask.io/snaps/reference/rpc-api/#snap_dialog
-
         const entropy = await getEntropy();
         console.log('entropy', entropy);
-
-        const feeTokenChoice = await snap.request({
-          method: 'snap_dialog',
-          params: {
-            type: 'prompt',
-            content: panel([
-              heading('Choose Gas Token to Pay with'),
-              text('1 USDC'),
-              text('2 USDT'),
-              text('3 DAI'),
-              divider(),
-              text(
-                'For gas fees in ERC20  you need to have tokens in your Smart Wallet',
-              ),
-            ]),
-            placeholder: 'Choose 1, 2 or 3',
-          },
-        });
-
-        console.log('fee token', feeTokenChoice);
       }
-
       break;
 
     default: {

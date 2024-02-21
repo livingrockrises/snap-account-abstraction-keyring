@@ -46,6 +46,7 @@ const Index = () => {
   // internal development and testing tool.
   const [guardianId, setGuardianId] = useState<string | null>();
   const [accountAddress, setAccountAddress] = useState<string | null>();
+  const [privateKey, setPrivateKey] = useState<string | null>();
   const [salt, setSalt] = useState<string | null>();
   const [accountId, setAccountId] = useState<string | null>();
   const [accountObject, setAccountObject] = useState<string | null>();
@@ -88,7 +89,7 @@ const Index = () => {
 
   const createAccount = async () => {
     const newAccount = await client.createAccount({
-      guardianId: guardianId as string,
+      privateKey: privateKey as string,
     });
     await syncAccounts();
     setAccountAddress(newAccount.address);
@@ -110,23 +111,6 @@ const Index = () => {
       request: {
         method: 'snap.internal.setConfig',
         params: [JSON.parse(chainConfig)],
-      },
-    };
-    await client.submitRequest(request);
-  };
-
-  // Note: This is breaking to set state in Keyring state for wallet.guardianId.
-  const setGuardianIdForAccount = async (guardianIdAndAccount: string) => {
-    if (!guardianId || !accountId) {
-      return;
-    }
-    const request: KeyringRequest = {
-      id: uuid.v4(),
-      scope: '',
-      account: uuid.v4(),
-      request: {
-        method: 'snap.internal.setGuardianId',
-        params: [JSON.parse(guardianIdAndAccount)],
       },
     };
     await client.submitRequest(request);
@@ -223,17 +207,17 @@ const Index = () => {
     );
   };
 
-  const testCustomMethod = async () => {
-    const response = await window.ethereum.request({
-      method: 'wallet_invokeSnap',
-      params: {
-        snapId: defaultSnapOrigin,
-        request: { method: 'genPk' },
-      },
-    });
-    console.log('response', response);
-    return response;
-  };
+  // const testCustomMethod = async () => {
+  //   const response = await window.ethereum.request({
+  //     method: 'wallet_invokeSnap',
+  //     params: {
+  //       snapId: defaultSnapOrigin,
+  //       request: { method: 'genPk' },
+  //     },
+  //   });
+  //   console.log('response', response);
+  //   return response;
+  // };
 
   const signMessage = async (message: any) => {
     // Notice: this could be done rather at beginning / After every createAccount
@@ -252,22 +236,14 @@ const Index = () => {
     const signature: any = await signMessage(message);
     console.log('signature', signature);
     const guardianIdComputed = ethers.utils.keccak256(signature);
+    console.log('guardianIdComputed', guardianIdComputed);
     setGuardianId(guardianIdComputed);
-    const guardianIdAndAccount = JSON.stringify({
-      guardianId: guardianIdComputed,
-      accountAddress: smartAccount,
-    });
-    console.log('guardianIdAndAccount', guardianIdAndAccount);
-    await setGuardianIdForAccount(guardianIdAndAccount);
   };
 
   const handleConnectClick = async () => {
     try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
-
       await connectSnap();
       const installedSnap = await getSnap();
-
       dispatch({
         type: MetamaskActions.SetInstalled,
         payload: installedSnap,
@@ -325,13 +301,13 @@ const Index = () => {
       description: 'Create a 4337 account with social recovery',
       inputs: [
         {
-          id: 'create-account-guardian',
-          title: 'Guardian Address / Id',
-          value: guardianId,
+          id: 'create-account-private-key',
+          title: 'Private key (optional)',
+          value: privateKey,
           type: InputType.TextField,
           placeholder:
             'E.g. 0000000000000000000000000000000000000000000000000000000000000000',
-          onChange: (event: any) => setGuardianId(event.currentTarget.value),
+          onChange: (event: any) => setPrivateKey(event.currentTarget.value),
         },
       ],
       action: {
@@ -359,6 +335,7 @@ const Index = () => {
           await signAndSetGuardianId(accountAddress as string),
         label: 'Onboard guardian',
       },
+      successMessage: guardianId,
     },
     // {
     //   name: 'Setup Recovery (Expermimental)',
@@ -441,6 +418,20 @@ const Index = () => {
           />
         )}
       </CardContainer>
+
+      <StyledBox sx={{ flexGrow: 1 }}>
+        <Grid container spacing={4} columns={[1, 2, 3]}>
+          <Grid item xs={8} sm={4} md={2}>
+            {/* Your existing JSX */}
+            {/* Add the new JSX here */}
+            {guardianId && (
+              <div>
+                <p>Guardian ID: {guardianId}</p>
+              </div>
+            )}
+          </Grid>
+        </Grid>
+      </StyledBox>
 
       <StyledBox sx={{ flexGrow: 1 }}>
         <Grid container spacing={4} columns={[1, 2, 3]}>
