@@ -232,6 +232,70 @@ export class BiconomyKeyring implements Keyring {
       // index: // saltToInt
     });
 
+    const feeQuotesResponse = await smartAccount.getTokenFees(
+      [
+        {
+          to: transactionDetails.to,
+          data: transactionDetails.data,
+          value: transactionDetails.value,
+        },
+      ],
+      {
+        paymasterServiceData: {
+          mode: PaymasterMode.ERC20,
+          // preferredToken: config.preferredToken,
+          // tokenList: []
+        },
+      },
+    );
+
+    const { feeQuotes } = feeQuotesResponse;
+    const spender = feeQuotesResponse.tokenPaymasterAddress;
+
+    console.log('feeQuotes', feeQuotes);
+
+    let feeTokenChoice;
+
+    if (feeQuotes) {
+      feeTokenChoice = await snap.request({
+        method: 'snap_dialog',
+        params: {
+          type: 'prompt',
+          content: panel([
+            heading('Choose Gas Token to Pay with'),
+            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+            text(`${feeQuotes[0]?.maxGasFee}   ${feeQuotes[0]?.symbol}`),
+            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+            text(
+              `${feeQuotes[1]?.maxGasFee ?? 'N/A'}   ${
+                feeQuotes[1]?.symbol ?? 'N/A'
+              }`,
+            ),
+            text(
+              `${feeQuotes[2]?.maxGasFee ?? 'N/A'}   ${
+                feeQuotes[2]?.symbol ?? 'N/A'
+              }`,
+            ),
+            text(
+              `${feeQuotes[3]?.maxGasFee ?? 'N/A'}   ${
+                feeQuotes[3]?.symbol ?? 'N/A'
+              }`,
+            ),
+            divider(),
+            text(
+              'For gas fees in ERC20 you need to have tokens in your Smart Wallet',
+            ),
+          ]),
+          placeholder: 'Choose 1, 2, 3 or 4',
+        },
+      });
+
+      console.log('fee token', feeTokenChoice);
+      feeTokenChoice = Number(feeTokenChoice);
+    } else {
+      throw new Error('No fee quotes found');
+    }
+
     const userop = await smartAccount.buildUserOp([
       {
         to: transactionDetails.to,
@@ -244,8 +308,12 @@ export class BiconomyKeyring implements Keyring {
 
     const useropWithPnd = await smartAccount.getPaymasterUserOp(userop, {
       mode: PaymasterMode.ERC20,
-      preferredToken: USDC_ADDRESS_MUMBAI,
+      calculateGasLimits: true,
+      feeQuote: feeQuotes[feeTokenChoice - 1] ?? feeQuotes[2],
+      spender,
     });
+
+    console.log('useropWithPnd ============>', useropWithPnd);
 
     const { chainId } = await provider.getNetwork();
 
@@ -261,7 +329,10 @@ export class BiconomyKeyring implements Keyring {
 
     const approval = await promptUser(
       'user operation confirmation',
-      'do you want to sign this userOp? you will pay with USDC in your account',
+      `do you want to sign this userOp? you will pay with ${
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        feeQuotes[feeTokenChoice - 1]?.symbol
+      } in your account`,
       userOpHash, // JSON.stringify(useropWithPnd),
     );
 
