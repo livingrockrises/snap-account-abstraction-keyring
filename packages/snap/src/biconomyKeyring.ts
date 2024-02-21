@@ -587,7 +587,7 @@ export class BiconomyKeyring implements Keyring {
   } {
     if (privateKey) {
       const privateKeyBuffer: Buffer = runSensitive(
-        () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
+        () => Buffer.from(hexToBytes(addHexPrefix(privateKey))),
         'Invalid private key',
       );
 
