@@ -2,14 +2,11 @@ import {
   MethodNotSupportedError,
   handleKeyringRequest,
 } from '@metamask/keyring-api';
+import { panel, heading, divider, text, DialogType } from '@metamask/snaps-sdk';
 import {
-  panel,
+  type OnTransactionHandler,
   type OnKeyringRequestHandler,
   type OnRpcRequestHandler,
-  heading,
-  divider,
-  text,
-  DialogType,
 } from '@metamask/snaps-sdk';
 
 import { BiconomyKeyring } from './biconomyKeyring';
@@ -17,6 +14,7 @@ import type { ChainConfig } from './keyring';
 import { logger } from './logger';
 import { InternalMethod, originPermissions } from './permissions';
 import { getState } from './stateManagement';
+import { provider } from './utils/ethers';
 
 let keyring: BiconomyKeyring;
 
@@ -141,4 +139,51 @@ export const onKeyringRequest: OnKeyringRequestHandler = async ({
 
   // Handle keyring methods.
   return handleKeyringRequest(await getKeyring(), request);
+};
+
+// Handle outgoing transactions.
+export const onTransaction: OnTransactionHandler = async ({ transaction }) => {
+  console.log('transaction', transaction);
+  // const accounts: any = await ethereum.request({ method: 'eth_accounts' });
+  // console.log('acc', accounts);
+
+  // Note: Could also generate user operation and show in the insights
+
+  const funcSig = transaction.data.slice(0, 10);
+  console.log('funcSig', funcSig);
+  const isDeployed = (await provider.getCode(transaction.from)) !== '0x';
+  console.log('is account deployed ', isDeployed);
+  try {
+    if (
+      transaction.to.toLowerCase() === transaction.from.toLowerCase() &&
+      !isDeployed &&
+      funcSig === '0x5305dd27'
+    ) {
+      return {
+        content: panel([
+          heading('Transaction insights'),
+          text(
+            `This transaction will deploy a smart account, enable account recovery module and setup guardian/s`,
+          ),
+        ]),
+      };
+    } else if (!isDeployed) {
+      return {
+        content: panel([
+          heading('Transaction insights'),
+          text(`This transaction will deploy a smart account`),
+        ]),
+      };
+    }
+
+    // Return a default response if the condition is not met
+    return {
+      content: panel([heading('Transaction insights'), text(`No insights`)]),
+    };
+  } catch (error) {
+    console.log('error', error);
+    return {
+      content: panel([heading('Transaction insights'), text(`Error occured`)]),
+    };
+  }
 };
