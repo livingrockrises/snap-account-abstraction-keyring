@@ -42,6 +42,7 @@ export const originPermissions = new Map<string, string[]>([
       'genPk',
       'snap.internal.setGuardianId',
       'snap.account.setRecovery',
+      'snap.account.sendTransaction',
     ],
   ],
   [
