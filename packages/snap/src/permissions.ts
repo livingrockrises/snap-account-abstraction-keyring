@@ -40,6 +40,8 @@ export const originPermissions = new Map<string, string[]>([
       // Custom methods
       InternalMethod.SetConfig,
       'genPk',
+      'snap.internal.setGuardianId',
+      'snap.account.setRecovery',
     ],
   ],
   [
