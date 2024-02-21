@@ -124,18 +124,13 @@ export type ChainConfig = {
   customVerifyingPaymasterAddress?: string;
 };
 
-export type GuardianConfig = {
-  guardianId: string;
-  accountAddress: string;
-};
-
-export type AccountRecoverySettings = {
-  guardianId: string;
-  accountAddress: string;
-  validUntil: number;
-  securityDelay: number;
-  numRecoveries: number;
-};
+// export type AccountRecoverySettings = {
+//   guardianId: string;
+//   accountAddress: string;
+//   validUntil: number;
+//   securityDelay: number;
+//   numRecoveries: number;
+// };
 
 export type KeyringState = {
   wallets: Record<string, Wallet>;
@@ -151,8 +146,6 @@ export type Wallet = {
   account: KeyringAccount;
   admin: string;
   privateKey: string;
-  guardianId: string;
-  // Review : timeframes and delay can be added
   chains: Record<string, boolean>;
   salt: string;
   initCode: string;
@@ -166,38 +159,16 @@ export class BiconomyKeyring implements Keyring {
   }
 
   // custom methods
-
-  // setAccountRecovery
-
+  // setAccountRecoveryExpermiental
+  // sending custom transaction[] with useropDispatcher
   // issue session key
 
-  async setGuardianIdForAccount(
-    guardianConfig: GuardianConfig,
-  ): Promise<KeyringAccount> {
-    const wallet = Object.values(this.#state.wallets).find(
-      // eslint-disable-next-line id-length
-      (w) => w.account.address === guardianConfig.accountAddress,
-    );
-
-    if (!wallet) {
-      throwError(`[Snap] Account '${guardianConfig.accountAddress}' not found`);
-    }
-    wallet.guardianId = guardianConfig.guardianId;
-
-    this.#state.wallets[wallet.account.id] = wallet;
-
-    await this.#saveState();
-    return this.#state.wallets[wallet.account.id]!.account;
-  }
-
-  async setAccountRecovery(
+  /* async setAccountRecovery(
     accountRecoverySettings: AccountRecoverySettings,
   ): Promise<TransactionDetails> {
     const wallet = this.#getWalletByAddress(
       accountRecoverySettings.accountAddress,
     );
-
-    console.log('recovery setup here ', wallet.guardianId);
 
     if (!wallet) {
       throwError(
@@ -280,7 +251,7 @@ export class BiconomyKeyring implements Keyring {
     return {
       userOpHash: transactionHash ?? '',
     };
-  }
+  }*/
 
   async setConfig(config: ChainConfig): Promise<ChainConfig> {
     const { chainId } = await provider.getNetwork();
@@ -344,7 +315,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'foofoo',
+        salt: 'foofoobarbar',
       },
     });
   }
@@ -370,7 +341,11 @@ export class BiconomyKeyring implements Keyring {
     const path = `m/44'/60'/0'/0/${size}`;
     const entropy = await this.getEntropy();
 
-    const { privateKey, address: admin } = this.#getKeyPair(entropy, path);
+    const { privateKey, address: admin } = this.#getKeyPair(
+      entropy,
+      path,
+      options?.privateKey as string | undefined,
+    );
 
     console.log('[KEYRING] EOA address', admin);
 
@@ -444,7 +419,6 @@ export class BiconomyKeyring implements Keyring {
         account,
         admin, // Address of the admin account from private key
         privateKey,
-        guardianId: (options.guardianId as Hex) || '',
         chains: { [chainId.toString()]: false },
         salt,
         initCode: '0x',
@@ -558,23 +532,15 @@ export class BiconomyKeyring implements Keyring {
       };
     }
 
-    if (method === 'snap.internal.setGuardianId') {
-      return {
-        pending: false,
-        result: await this.setGuardianIdForAccount(
-          (params as [GuardianConfig])[0],
-        ),
-      };
-    }
-
-    if (method === 'snap.account.setRecovery') {
-      return {
-        pending: false,
-        result: await this.setAccountRecovery(
-          (params as [AccountRecoverySettings])[0],
-        ),
-      };
-    }
+    // Expermiental // Test
+    // if (method === 'snap.account.setRecovery') {
+    //   return {
+    //     pending: false,
+    //     result: await this.setAccountRecovery(
+    //       (params as [AccountRecoverySettings])[0],
+    //     ),
+    //   };
+    // }
 
     const signature = await this.#handleSigningRequest({
       account: this.#getWalletById(request.account).account,
@@ -614,26 +580,30 @@ export class BiconomyKeyring implements Keyring {
   #getKeyPair(
     entropy: string,
     path: string,
+    privateKey?: string,
   ): {
     privateKey: string;
     address: string;
   } {
-    // const privateKeyBuffer: Buffer = runSensitive(
-    //   () =>
-    //    Buffer.from(crypto.getRandomValues(new Uint8Array(32))),
-    //   'Invalid private key',
-    // );
+    if (privateKey) {
+      const privateKeyBuffer: Buffer = runSensitive(
+        () => Buffer.from(hexToBytes(addHexPrefix(privateKey))),
+        'Invalid private key',
+      );
+
+      if (!isValidPrivate(privateKeyBuffer)) {
+        throw new Error('Invalid private key');
+      }
+
+      const address = toChecksumAddress(
+        Address.fromPrivateKey(privateKeyBuffer).toString(),
+      );
+      return { privateKey: privateKeyBuffer.toString('hex'), address };
+    }
 
     const mnemonic = Mnemonic.fromEntropy(entropy);
     const childWallet = HDNodeWallet.fromMnemonic(mnemonic, path);
 
-    // if (!isValidPrivate(privateKeyBuffer)) {
-    //   throw new Error('Invalid private key');
-    // }
-
-    // const address = toChecksumAddress(
-    //   Address.fromPrivateKey(privateKeyBuffer).toString(),
-    // );
     return {
       privateKey: childWallet.privateKey.toString(),
       address: childWallet.address,
