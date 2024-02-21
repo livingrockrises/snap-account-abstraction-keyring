@@ -159,6 +159,35 @@ const Index = () => {
     await nftContract.safeMint(accounts[0]);
   };
 
+  const mintNFTExperimental = async () => {
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    const signer = provider.getSigner();
+    // Review : test signer.getAddress()
+    const accounts: any = await ethereum.request({ method: 'eth_accounts' });
+
+    const nftInterface = new ethers.utils.Interface([
+      'function safeMint(address _to)',
+    ]);
+
+    const transactionDetails = {
+      accountAddress: accounts[0],
+      to: BICONOMY_SDK_NFT_MULTICHAIN_ADDRESS,
+      value: '0x0',
+      data: nftInterface.encodeFunctionData('safeMint', [accounts[0]]),
+    };
+
+    const request: KeyringRequest = {
+      id: uuid.v4(),
+      scope: '',
+      account: uuid.v4(),
+      request: {
+        method: 'snap.account.sendTransaction',
+        params: [transactionDetails],
+      },
+    };
+    await client.submitRequest(request);
+  };
+
   const setAccountRecoveryFromCompanionDapp = async (
     guardianIdPassed: string,
   ) => {
@@ -392,6 +421,15 @@ const Index = () => {
       description: 'Mint NFT',
       action: {
         callback: async () => await mintNFT(),
+        label: 'Mint',
+      },
+      successMessage: 'Sending UserOp to Mint an NFT',
+    },
+    {
+      name: 'Mint NFT/Custom tx Experimental',
+      description: 'Mint NFT and pay with ERC20',
+      action: {
+        callback: async () => await mintNFTExperimental(),
         label: 'Mint',
       },
       successMessage: 'Sending UserOp to Mint an NFT',

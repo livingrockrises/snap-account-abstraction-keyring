@@ -77,7 +77,7 @@ async function getEntropy() {
     method: 'snap_getEntropy',
     params: {
       version: 1,
-      salt: 'foofoobarbar',
+      salt: 'foofoobarbarbarbar',
     },
   });
 }

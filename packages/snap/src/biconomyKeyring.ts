@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable camelcase */
+import type { UserOpStatus } from '@biconomy-devx/account';
 import {
   createSmartAccountClient,
   PaymasterMode,
@@ -62,6 +63,7 @@ import {
   getDummyPaymasterAndData,
 } from './constants/dummy-values';
 import { DEFAULT_ENTRYPOINTS } from './constants/entrypoints';
+import { USDC_ADDRESS_MUMBAI } from './constants/tokenConfig';
 import { logger } from './logger';
 import { InternalMethod } from './permissions';
 import { saveState } from './stateManagement';
@@ -138,8 +140,21 @@ export type KeyringState = {
   config: Record<number, ChainConfig>;
 };
 
-export type TransactionDetails = {
+// export type TransactionDetails = {
+//   userOpHash: string;
+// };
+
+export type TransactionResponse = {
   userOpHash: string;
+  transactionHash: string;
+};
+
+// Can have array of objects also (to, value, data) as technically batching is now possible from companion dapp!
+export type TransactionPayload = {
+  accountAddress: string;
+  to: string;
+  value: string;
+  data: string;
 };
 
 export type Wallet = {
@@ -149,6 +164,31 @@ export type Wallet = {
   chains: Record<string, boolean>;
   salt: string;
   initCode: string;
+};
+
+export const promptUser = async (
+  prompt: string,
+  description: string,
+  content: string,
+): Promise<boolean> => {
+  const response: any = await snap.request({
+    method: 'snap_dialog',
+    params: {
+      type: 'confirmation',
+      content: panel([
+        heading('Transaction request'),
+        divider(),
+        text(`**${prompt}**`),
+        text(`${description}`),
+        text(`${content}`),
+      ]),
+    },
+  });
+  console.log('Prompt user response', response);
+  if (response) {
+    return response;
+  }
+  return false;
 };
 
 export class BiconomyKeyring implements Keyring {
@@ -163,6 +203,103 @@ export class BiconomyKeyring implements Keyring {
   // sending custom transaction[] with useropDispatcher
   // issue session key
 
+  async sendTransaction(
+    transactionDetails: TransactionPayload,
+  ): Promise<TransactionResponse> {
+    console.log('sendTransaction called ', transactionDetails);
+
+    const wallet = this.#getWalletByAddress(transactionDetails.accountAddress);
+
+    if (!wallet) {
+      throwError(
+        `[Snap] Account '${transactionDetails.accountAddress}' not found`,
+      );
+    }
+
+    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
+    const client = createWalletClient({
+      account: signerAccount,
+      chain: polygonMumbai,
+      transport: http(),
+    });
+
+    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
+    const smartAccount = await createSmartAccountClient({
+      signer: client,
+      bundlerUrl:
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
+      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      // index: // saltToInt
+    });
+
+    const userop = await smartAccount.buildUserOp([
+      {
+        to: transactionDetails.to,
+        data: transactionDetails.data,
+        value: transactionDetails.value,
+      },
+    ]);
+
+    console.log('userop', userop);
+
+    const useropWithPnd = await smartAccount.getPaymasterUserOp(userop, {
+      mode: PaymasterMode.ERC20,
+      preferredToken: USDC_ADDRESS_MUMBAI,
+    });
+
+    const { chainId } = await provider.getNetwork();
+
+    const signer = getSigner(wallet.privateKey);
+
+    const entryPoint = await this.#getEntryPoint(Number(chainId), signer);
+
+    const userOpHash = getUserOperationHash(
+      useropWithPnd as any,
+      await entryPoint.getAddress(),
+      chainId.toString(10),
+    );
+
+    const approval = await promptUser(
+      'user operation confirmation',
+      'do you want to sign this userOp? you will pay with USDC in your account',
+      userOpHash, // JSON.stringify(useropWithPnd),
+    );
+
+    if (approval) {
+      const userOpWithsignature = await smartAccount.signUserOp(useropWithPnd);
+      console.log('signature', userOpWithsignature.signature);
+
+      const userOpResponse = await smartAccount.sendUserOp(useropWithPnd);
+
+      const transactionDetails1: UserOpStatus =
+        await userOpResponse.waitForTxHash();
+      const txHash = transactionDetails1.transactionHash;
+      console.log('transachion hash', txHash);
+
+      if (txHash) {
+        await snap.request({
+          method: 'snap_dialog',
+          params: {
+            type: 'confirmation',
+            content: panel([
+              heading('Transaction sent'),
+              divider(),
+              text(`Transaction hash :`),
+              // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+              text(`**${txHash}**`),
+            ]),
+          },
+        });
+      }
+      return {
+        userOpHash: userOpResponse.userOpHash ?? '',
+        transactionHash: txHash ?? '',
+      };
+    }
+    throw new Error('UserOp not signed');
+  }
+
+  // called by setAccountRecoveryExperimental
   /* async setAccountRecovery(
     accountRecoverySettings: AccountRecoverySettings,
   ): Promise<TransactionDetails> {
@@ -315,7 +452,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'foofoobarbar',
+        salt: 'foofoobarbarbarbar',
       },
     });
   }
@@ -541,6 +678,13 @@ export class BiconomyKeyring implements Keyring {
     //     ),
     //   };
     // }
+
+    if (method === 'snap.account.sendTransaction') {
+      return {
+        pending: false,
+        result: await this.sendTransaction((params as [TransactionPayload])[0]),
+      };
+    }
 
     const signature = await this.#handleSigningRequest({
       account: this.#getWalletById(request.account).account,
