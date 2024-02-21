@@ -338,7 +338,7 @@ const Index = () => {
       successMessage: guardianId,
     },
     // {
-    //   name: 'Setup Recovery (Expermimental)',
+    //   name: 'Setup Recovery (Experimental)',
     //   description:
     //     'Setting up recovery on chain using set guardian (Custom Keyring API)',
     //   inputs: [
