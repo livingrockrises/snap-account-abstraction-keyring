@@ -142,6 +142,8 @@ const Index = () => {
   };
 
   const mintNFT = async () => {
+    // Review
+    // await window.ethereum.request({ method: 'eth_requestAccounts' });
     const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
     const accounts: any = await ethereum.request({ method: 'eth_accounts' });
