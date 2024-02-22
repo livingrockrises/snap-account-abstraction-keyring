@@ -191,6 +191,11 @@ export const promptUser = async (
   return false;
 };
 
+// This we should be able to source symbol or address from what's being set under gas settings on companion Dapp
+// Note: could be a mapping per chainId
+const PREFERRED_FEE_TOKEN_ADDRESS =
+  '0xdA5289fCAAF71d52a80A254da614a192b693e977';
+
 export class BiconomyKeyring implements Keyring {
   #state: KeyringState;
 
@@ -228,7 +233,7 @@ export class BiconomyKeyring implements Keyring {
       signer: client,
       bundlerUrl:
         'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
       // index: // saltToInt
     });
 
@@ -325,7 +330,7 @@ export class BiconomyKeyring implements Keyring {
       signer: client,
       bundlerUrl:
         'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
       // index: // saltToInt
     });
 
@@ -452,7 +457,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'foofoobarbarbarbar',
+        salt: 'foobarbarbarbar',
       },
     });
   }
@@ -518,7 +523,7 @@ export class BiconomyKeyring implements Keyring {
       signer: client,
       bundlerUrl:
         'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
     });
 
     const aaAddress = await smartAccount.getAccountAddress();
@@ -826,7 +831,7 @@ export class BiconomyKeyring implements Keyring {
       signer: client,
       bundlerUrl:
         'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
       // index: // saltToInt
     });
 
@@ -896,7 +901,7 @@ export class BiconomyKeyring implements Keyring {
       signer: client,
       bundlerUrl:
         'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'tf47vamuW.3c55594d-14f8-4451-b5dd-39f46abe272a', // placeholder
+      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
       // index: // saltToInt
     });
     console.log(
@@ -923,28 +928,36 @@ export class BiconomyKeyring implements Keyring {
 
     // TODO: get preferred token from set config
     try {
-      console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+      console.log(
+        'biconomyBaseUserOp ',
+        biconomyBaseUserOp,
+        Number(biconomyBaseUserOp.nonce),
+      );
 
       // Get paymasterAndData directly if feeTokenAddress is known and it's approval is given
 
-      const useropWithPnd = await smartAccount.getPaymasterAndData(
-        biconomyBaseUserOp,
-        {
-          mode: PaymasterMode.SPONSORED,
-          calculateGasLimits: false,
-          // feeTokenAddress: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
-        },
-      );
+      let useropWithPnd;
 
-      // const useropWithPnd = await smartAccount.getPaymasterUserOp(
-      //   biconomyBaseUserOp,
-      //   {
-      //     mode: PaymasterMode.ERC20,
-      //     calculateGasLimits: false,
-      //     preferredToken: '0xdA5289fCAAF71d52a80A254da614a192b693e977', // Mumbai USDC (get from config)
-      //     // skipPatchCallData: true,
-      //   },
-      // );
+      if (Number(biconomyBaseUserOp.nonce) <= 2) {
+        useropWithPnd = await smartAccount.getPaymasterAndData(
+          biconomyBaseUserOp,
+          {
+            mode: PaymasterMode.SPONSORED,
+            calculateGasLimits: false,
+          },
+        );
+      } else {
+        useropWithPnd = await smartAccount.getPaymasterUserOp(
+          biconomyBaseUserOp,
+          {
+            mode: PaymasterMode.ERC20,
+            calculateGasLimits: false,
+            // Note: how can this come from some settings
+            preferredToken: PREFERRED_FEE_TOKEN_ADDRESS, // Mumbai USDC (get from config)
+            skipPatchCallData: true,
+          },
+        );
+      }
 
       console.log('useropWithPnd ', useropWithPnd);
 

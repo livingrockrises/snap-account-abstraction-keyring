@@ -16,6 +16,7 @@ import {
 import { defaultSnapOrigin } from '../config';
 import {
   ACCOUNT_RECOVERY_MODULE_ADDRESS,
+  BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
   BICONOMY_SDK_NFT_MULTICHAIN_ADDRESS,
 } from '../config/constants';
 import { MetamaskActions, MetaMaskContext } from '../hooks';
@@ -24,6 +25,7 @@ import type { KeyringState } from '../utils';
 import { connectSnap, getSnap, isSynchronousMode } from '../utils';
 import { BiconomyAccountRecoveryAbi } from '../utils/abi/BiconomyAccountRecoveryAbi';
 import { BiconomyImplementationAbi } from '../utils/abi/BiconomyImplementationAbi';
+import { ERC20Abi } from '../utils/abi/ERC20Abi';
 import { getMessageToSignByGuardian } from '../utils/accountRecovery';
 
 const snapId = defaultSnapOrigin;
@@ -47,6 +49,7 @@ const Index = () => {
   const [guardianId, setGuardianId] = useState<string | null>();
   const [accountAddress, setAccountAddress] = useState<string | null>();
   const [privateKey, setPrivateKey] = useState<string | null>();
+  const [feeToken, setFeeToken] = useState<string | null>();
   const [salt, setSalt] = useState<string | null>();
   const [accountId, setAccountId] = useState<string | null>();
   const [accountObject, setAccountObject] = useState<string | null>();
@@ -217,13 +220,6 @@ const Index = () => {
       BiconomyImplementationAbi,
     );
 
-    // const setUpAndEnableModuleData = smartAccountInterface.encodeFunctionData(
-    //   'setUpAndEnableModule',
-    //   [ACCOUNT_RECOVERY_MODULE_ADDRESS, accountRecoverySetupData],
-    // );
-
-    // console.log('setUpAndEnableModuleData', setUpAndEnableModuleData);
-
     const smartAccount = new ethers.Contract(
       accounts[0],
       smartAccountInterface,
@@ -233,6 +229,22 @@ const Index = () => {
     await smartAccount.setupAndEnableModule(
       ACCOUNT_RECOVERY_MODULE_ADDRESS,
       accountRecoverySetupData,
+    );
+  };
+
+  const approveTokenPaymaster = async (erc20Address: string) => {
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    const signer = provider.getSigner();
+    const accounts: any = await ethereum.request({ method: 'eth_accounts' });
+    console.log('current account ', accounts[0]);
+
+    const erc20Interface = new ethers.utils.Interface(ERC20Abi);
+
+    const feeToken = new ethers.Contract(erc20Address, erc20Interface, signer);
+
+    await feeToken.approve(
+      BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
+      ethers.constants.MaxUint256,
     );
   };
 
@@ -328,17 +340,17 @@ const Index = () => {
     {
       name: 'Create account',
       description: 'Create a 4337 account with social recovery',
-      inputs: [
-        {
-          id: 'create-account-private-key',
-          title: 'Private key (optional)',
-          value: privateKey,
-          type: InputType.TextField,
-          placeholder:
-            'E.g. 0000000000000000000000000000000000000000000000000000000000000000',
-          onChange: (event: any) => setPrivateKey(event.currentTarget.value),
-        },
-      ],
+      // inputs: [
+      //   {
+      //     id: 'create-account-private-key',
+      //     title: 'Private key (optional)',
+      //     value: privateKey,
+      //     type: InputType.TextField,
+      //     placeholder:
+      //       'E.g. 0000000000000000000000000000000000000000000000000000000000000000',
+      //     onChange: (event: any) => setPrivateKey(event.currentTarget.value),
+      //   },
+      // ],
       action: {
         callback: async () => await createAccount(),
         label: 'Create Account',
@@ -389,7 +401,7 @@ const Index = () => {
     //   },
     // },
     {
-      name: 'Setup Recovery',
+      name: 'Setup Recovery and deploy account',
       description: 'Setting up recovery on chain using set guardian',
       inputs: [
         {
@@ -416,6 +428,25 @@ const Index = () => {
     //     label: 'Test',
     //   },
     // },
+    {
+      name: 'Approve Token Paymaster',
+      description: 'Approve Token Paymaster',
+      inputs: [
+        {
+          id: 'ERC20 token address',
+          title: 'Fee token address',
+          value: feeToken,
+          type: InputType.TextField,
+          placeholder: 'E.g. 0xdA5289fCAAF71d52a80A254da614a192b693e977',
+          onChange: (event: any) => setFeeToken(event.currentTarget.value),
+        },
+      ],
+      action: {
+        callback: async () => await approveTokenPaymaster(feeToken as string),
+        label: 'Approve',
+      },
+      successMessage: 'Sending UserOp to Approve token paymaster',
+    },
     {
       name: 'Mint NFT',
       description: 'Mint NFT',
