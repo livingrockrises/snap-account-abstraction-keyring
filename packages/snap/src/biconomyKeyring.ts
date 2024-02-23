@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable camelcase */
-import type { UserOpStatus } from '@biconomy-devx/account';
+import type {
+  // IHybridPaymaster,
+  // SponsorUserOperationDto,
+  UserOpStatus,
+} from '@biconomy-devx/account';
 import {
   createSmartAccountClient,
   PaymasterMode,
@@ -457,7 +461,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'foobarbarbarbar',
+        salt: 'foobarfoobarbaryes',
       },
     });
   }
@@ -860,20 +864,22 @@ export class BiconomyKeyring implements Keyring {
       callData: biconomyBaseUserOp?.callData?.toString() ?? '0x',
       dummySignature:
         biconomyBaseUserOp?.signature?.toString() ?? DUMMY_SIGNATURE,
-      dummyPaymasterAndData: getDummyPaymasterAndData(
+      // erc20 paymaster dummy pnd
+      // could be based on gas mode set flag
+      dummyPaymasterAndData:
+        '0x00000f7365ca6c59a2c93719ad53d567ed49c14c010000000000000000000000000000000000000000000000000000000065d84c650000000000000000000000000000000000000000000000000000000065d8455d000000000000000000000000da5289fcaaf71d52a80a254da614a192b693e97700000000000000000000000000000f7748595e46527413574a9327942e744e9100000000000000000000000000000000000000000000000000000000000f1cad00000000000000000000000000000000000000000000000000000000001053b0b392cdfaa75db4946e2a25f2826e66ac6f7486540c569de1e6cd6a51e1cf07cd1a96990127338121339b0b7496617dcadfd61f33e32e8312feb15e8f9c5fa3ef1c',
+      /* getDummyPaymasterAndData(
         verifyingPaymasterAddress,
-      ), // review
-      // TODO: use biconomy
+      ), // review*/
       bundlerUrl:
-        // 'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
-        'https://api.pimlico.io/v1/mumbai/rpc?apikey=f57f7d99-f24c-435e-b7df-7a2cc4b43d1f', // chainConfig?.bundlerUrl ?? '',
-      gasLimits: {
+        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // chainConfig?.bundlerUrl ?? '',
+      // Could optionally pass on gas limits
+      /* gasLimits: {
         callGasLimit: biconomyBaseUserOp?.callGasLimit?.toString() ?? '0x0',
-        verificationGasLimit:
-          biconomyBaseUserOp?.verificationGasLimit?.toString() ?? '0x0',
+        verificationGasLimit: biconomyBaseUserOp?.verificationGasLimit?.toString() ?? '0x0',
         preVerificationGas:
           biconomyBaseUserOp?.preVerificationGas?.toString() ?? '0x0',
-      },
+      },*/
     };
 
     console.log('ethBaseUserOp ', ethBaseUserOp);
