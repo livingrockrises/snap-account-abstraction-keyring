@@ -459,15 +459,15 @@ const Index = () => {
       },
       successMessage: 'Sending UserOp to Mint an NFT',
     },
-    {
-      name: 'Mint NFT/Custom tx Experimental',
-      description: 'Mint NFT and pay with ERC20',
-      action: {
-        callback: async () => await mintNFTExperimental(),
-        label: 'Mint',
-      },
-      successMessage: 'Sending UserOp to Mint an NFT',
-    },
+    // {
+    //   name: 'Mint NFT/Custom tx Experimental',
+    //   description: 'Mint NFT and pay with ERC20',
+    //   action: {
+    //     callback: async () => await mintNFTExperimental(),
+    //     label: 'Mint',
+    //   },
+    //   successMessage: 'Sending UserOp to Mint an NFT',
+    // },
   ];
   return (
     <Container>

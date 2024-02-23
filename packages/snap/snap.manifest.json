@@ -1,13 +1,13 @@
 {
   "version": "0.2.1",
   "description": "An account abstraction keyring snap that integrates with MetaMask accounts.",
-  "proposedName": "MetaMask Account Abstraction Snap Keyring",
+  "proposedName": "Biconomy Smart Account Snap",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/MetaMask/snap-account-abstraction-keyring.git"
   },
   "source": {
-    "shasum": "BfV4DOYULupdtKKYGYgLOeCWaXBRhrO4A+GJzEAyltY=",
+    "shasum": "MF/iEiT3NrOg+IbhX3OPQ2Eq/ufmn22lRXdaVnn5laI=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
