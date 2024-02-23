@@ -74,6 +74,7 @@ const Index = () => {
   const [accountAddrInput, setAccountAddrInput] = useState('');
   // UserOp method state
   const [chainConfig, setChainConfigObject] = useState<string | null>();
+  const [isErc20, setIsErc20] = useState(false);
 
   const client = new KeyringSnapRpcClient(snapId, window.ethereum);
 
@@ -434,16 +435,14 @@ const Index = () => {
     {
       name: 'Approve Token Paymaster',
       description: 'Approve Token Paymaster',
-      inputs: [
-        {
-          id: 'ERC20 token address',
-          title: 'Fee token address',
-          value: feeToken,
-          type: InputType.TextField,
-          placeholder: 'E.g. 0xdA5289fCAAF71d52a80A254da614a192b693e977',
-          onChange: (event: any) => setFeeToken(event.currentTarget.value),
-        },
-      ],
+      tokenPaymaster: {
+        id: 'ERC20 token address',
+        title: 'Fee token address',
+        value: feeToken,
+        placeholder: 'E.g. 0xdA5289fCAAF71d52a80A254da614a192b693e977',
+        setIsErc20: (event: any) => setIsErc20(event.target.checked),
+        isErc20,
+      },
       action: {
         callback: async () => await approveTokenPaymaster(feeToken as string),
         label: 'Approve',
