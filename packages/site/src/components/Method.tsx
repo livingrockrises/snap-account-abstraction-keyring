@@ -157,7 +157,7 @@ export const Method = ({
       {tokenPaymaster && (
         <>
           <Grid sx={{ paddingLeft: 1 }}>
-            Enable Token Paymaster:
+            Enable Token Paymaster: (Pay gas in USDC)
             <Switch
               checked={tokenPaymaster.isErc20 || false}
               onChange={(event) => tokenPaymaster.setIsErc20(event)}
@@ -165,17 +165,6 @@ export const Method = ({
           </Grid>
           <Grid sx={{ paddingLeft: 1, fontSize: 12, marginBottom: 2 }}>
             (This snap will only sponsor one more sponsored transaction)
-          </Grid>
-
-          <Grid
-            sx={{
-              paddingLeft: 1,
-              color: 'beige',
-              fontSize: 12,
-              marginBottom: 2,
-            }}
-          >
-            Pay gas in USDC: 0xdA5289fCAAF71d52a80A254da614a192b693e977
           </Grid>
         </>
       )}

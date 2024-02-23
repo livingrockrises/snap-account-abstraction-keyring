@@ -457,7 +457,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'foobarhelloworld',
+        salt: 'aasnapbiconomy',
       },
     });
   }
@@ -940,7 +940,7 @@ export class BiconomyKeyring implements Keyring {
 
       let useropWithPnd;
 
-      if (Number(biconomyBaseUserOp.nonce) <= 3) {
+      if (Number(biconomyBaseUserOp.nonce) <= 2) {
         useropWithPnd = await smartAccount.getPaymasterAndData(
           biconomyBaseUserOp,
           {

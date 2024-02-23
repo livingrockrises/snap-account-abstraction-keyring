@@ -19,6 +19,7 @@ import {
   ACCOUNT_RECOVERY_MODULE_ADDRESS,
   BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
   BICONOMY_SDK_NFT_MULTICHAIN_ADDRESS,
+  POLYGON_MUMBAI_USDC,
 } from '../config/constants';
 import { MetamaskActions, MetaMaskContext } from '../hooks';
 import { InputType } from '../types';
@@ -66,7 +67,7 @@ const Index = () => {
   const [guardianId, setGuardianId] = useState<string | null>();
   const [accountAddress, setAccountAddress] = useState<string | null>();
   const [privateKey, setPrivateKey] = useState<string | null>();
-  const [feeToken, setFeeToken] = useState<string | null>();
+  const [feeToken, setFeeToken] = useState<string | null>(POLYGON_MUMBAI_USDC);
   const [salt, setSalt] = useState<string | null>();
   const [accountId, setAccountId] = useState<string | null>();
   const [accountObject, setAccountObject] = useState<string | null>();
@@ -261,9 +262,13 @@ const Index = () => {
 
     const erc20Interface = new ethers.utils.Interface(ERC20Abi);
 
-    const feeToken = new ethers.Contract(erc20Address, erc20Interface, signer);
+    const feeTokenContract = new ethers.Contract(
+      erc20Address,
+      erc20Interface,
+      signer,
+    );
 
-    await feeToken.approve(
+    await feeTokenContract.approve(
       BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
       ethers.constants.MaxUint256,
     );
@@ -446,6 +451,7 @@ const Index = () => {
       action: {
         callback: async () => await approveTokenPaymaster(feeToken as string),
         label: 'Approve',
+        disabled: !isErc20,
       },
       successMessage: 'Sending UserOp to Approve token paymaster',
     },

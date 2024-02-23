@@ -90,6 +90,13 @@ const ActionButton = styled.button<ActionButtonProps>`
     border: none;
     color: #fff;
   }
+
+  &:disabled {
+    background-color: #b4b4b8;
+    border: none;
+    color: #fff;
+    opacity: 0.5;
+  }
 `;
 
 ActionButton.defaultProps = {
@@ -169,9 +176,10 @@ export const HeaderButtons = ({
 };
 
 export const MethodButton = (props: any) => {
+  console.log(props.disable);
   return (
     <ActionButton
-      disabled={props.disabled}
+      disabled={props.disable}
       onClick={props.onClick}
       width={props.width}
       margin={props.margin}
