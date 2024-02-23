@@ -1,3 +1,4 @@
+import { Switch } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import React, { useState } from 'react';
 import styled from 'styled-components';
@@ -71,6 +72,7 @@ export type MethodProps = {
     onChange: () => null;
     type: InputType;
   }[];
+  tokenPaymaster: any;
   action: {
     callback: () => Promise<unknown>;
     disabled: boolean;
@@ -86,6 +88,7 @@ export const Method = ({
   action,
   successMessage,
   failureMessage,
+  tokenPaymaster,
 }: MethodProps) => {
   const [response, setResponse] = useState<unknown>();
   const [error, setError] = useState<unknown>();
@@ -151,6 +154,32 @@ export const Method = ({
         ),
       )}
 
+      {tokenPaymaster && (
+        <>
+          <Grid sx={{ paddingLeft: 1 }}>
+            Enable Token Paymaster:
+            <Switch
+              checked={tokenPaymaster.isErc20 || false}
+              onChange={(event) => tokenPaymaster.setIsErc20(event)}
+            />
+          </Grid>
+          <Grid sx={{ paddingLeft: 1, fontSize: 12, marginBottom: 2 }}>
+            (This snap will only sponsor one more sponsored transaction)
+          </Grid>
+
+          <Grid
+            sx={{
+              paddingLeft: 1,
+              color: 'beige',
+              fontSize: 12,
+              marginBottom: 2,
+            }}
+          >
+            Pay gas in USDC: 0xdA5289fCAAF71d52a80A254da614a192b693e977
+          </Grid>
+        </>
+      )}
+
       {action && (
         <MethodButton
           onClick={async () => {
@@ -170,7 +199,6 @@ export const Method = ({
           label={action.label}
         />
       )}
-
       {response !== undefined && (
         <CopyableContainer>
           <AlertBanner
@@ -180,7 +208,6 @@ export const Method = ({
           <CopyableItem value={JSON.stringify(response, null, 2)} />
         </CopyableContainer>
       )}
-
       {error !== undefined && (
         <CopyableContainer>
           <AlertBanner
