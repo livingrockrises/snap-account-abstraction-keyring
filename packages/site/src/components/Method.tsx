@@ -41,6 +41,7 @@ const TextField = styled.input`
   margin: 8px 2.5% 8px 16px;
   background: transparent;
   border-radius: 5px;
+  color: #fff;
   box-sizing: border-box;
   border: 1px solid #bbc0c5;
 `;
@@ -95,6 +96,7 @@ export const Method = ({
         return (
           <TextField
             id={props.id}
+            value={props.value}
             placeholder={props.placeholder}
             onChange={props.onChange}
           />
@@ -157,6 +159,7 @@ export const Method = ({
             try {
               // eslint-disable-next-line id-length
               const r = await action.callback();
+              console.log('here', r);
               setResponse(r === undefined ? null : r);
               // eslint-disable-next-line id-length
             } catch (e: any) {
