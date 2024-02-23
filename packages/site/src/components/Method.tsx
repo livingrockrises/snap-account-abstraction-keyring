@@ -163,6 +163,10 @@ export const Method = ({
               onChange={(event) => tokenPaymaster.setIsErc20(event)}
             />
           </Grid>
+          <Grid sx={{ paddingLeft: 1, fontSize: 12, marginBottom: 2 }}>
+            (This snap will only sponsor one more sponsored transaction)
+          </Grid>
+
           <Grid
             sx={{
               paddingLeft: 1,

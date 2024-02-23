@@ -434,7 +434,7 @@ const Index = () => {
     // },
     {
       name: 'Approve Token Paymaster',
-      description: 'Approve Token Paymaster',
+      // description: 'Approve Token Paymaster',
       tokenPaymaster: {
         id: 'ERC20 token address',
         title: 'Fee token address',
@@ -471,8 +471,8 @@ const Index = () => {
   return (
     <Container>
       <BannerSection />
-      <CardContainer>
-        {!state.installedSnap && (
+      {!state.installedSnap && (
+        <CardContainer>
           <Card
             content={{
               title: 'Connect',
@@ -487,12 +487,12 @@ const Index = () => {
             }}
             disabled={!state.hasMetaMask}
           />
-        )}
-      </CardContainer>
+        </CardContainer>
+      )}
 
       {accountAddress ? (
         <>
-          <StyledBox sx={{ flexGrow: 1, maxWidth: 800 }}>
+          <StyledBox sx={{ flexGrow: 1, maxWidth: 800, marginTop: 3 }}>
             {/* Not using this for now*/}
             {/* <DividerTitle>Options</DividerTitle>*/}
             {/* <Toggle*/}
