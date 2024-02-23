@@ -33,7 +33,7 @@ const SubTitle = styled.p`
 export const BannerSection = () => {
   return (
     <AccordionContainer>
-      <Title>Biconomy Metamask Snap</Title>
+      <Title>Biconomy Smart Account Snap</Title>
       <SubContainer>
         <SubTitle>
           Create and add a smart account to your metamask wallet.
