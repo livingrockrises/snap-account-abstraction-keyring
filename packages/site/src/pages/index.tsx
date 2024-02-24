@@ -117,7 +117,7 @@ const Index = () => {
     await syncAccounts();
     setAccountAddress(newAccount.address);
     // Review
-    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    // await window.ethereum.request({ method: 'eth_requestAccounts' });
     console.log('newAccount', newAccount);
     setAccountObject(JSON.stringify(newAccount));
     setAccountAddrInput(newAccount.address);
@@ -288,7 +288,7 @@ const Index = () => {
 
   const signMessage = async (message: any) => {
     // Notice: this could be done rather at beginning / After every createAccount
-    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    // await window.ethereum.request({ method: 'eth_requestAccounts' });
 
     const provider = new ethers.providers.Web3Provider(window.ethereum as any);
     const signer = provider.getSigner();
