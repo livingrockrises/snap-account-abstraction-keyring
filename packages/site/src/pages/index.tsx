@@ -1,11 +1,12 @@
 import type { KeyringAccount, KeyringRequest } from '@metamask/keyring-api';
 import { KeyringSnapRpcClient } from '@metamask/keyring-api';
-import Grid from '@mui/material/Grid';
 import { ethers } from 'ethers';
 import React, { useContext, useEffect, useState } from 'react';
+import styled from 'styled-components';
 import * as uuid from 'uuid';
 
-import { Accordion, AccountList, Card, ConnectButton } from '../components';
+import { Accordion, Card, ConnectButton } from '../components';
+import BannerSection from '../components/BannerSection';
 import {
   CardContainer,
   Container,
@@ -16,7 +17,9 @@ import {
 import { defaultSnapOrigin } from '../config';
 import {
   ACCOUNT_RECOVERY_MODULE_ADDRESS,
+  BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
   BICONOMY_SDK_NFT_MULTICHAIN_ADDRESS,
+  POLYGON_MUMBAI_USDC,
 } from '../config/constants';
 import { MetamaskActions, MetaMaskContext } from '../hooks';
 import { InputType } from '../types';
@@ -24,6 +27,7 @@ import type { KeyringState } from '../utils';
 import { connectSnap, getSnap, isSynchronousMode } from '../utils';
 import { BiconomyAccountRecoveryAbi } from '../utils/abi/BiconomyAccountRecoveryAbi';
 import { BiconomyImplementationAbi } from '../utils/abi/BiconomyImplementationAbi';
+import { ERC20Abi } from '../utils/abi/ERC20Abi';
 import { getMessageToSignByGuardian } from '../utils/accountRecovery';
 
 const snapId = defaultSnapOrigin;
@@ -38,6 +42,22 @@ const initialState: {
   useSynchronousApprovals: true,
 };
 
+const MethodButton = styled.button`
+  width: 200px;
+  background-color: #0376c9;
+  color: #fff;
+  border-radius: 999px;
+  border: none;
+  padding: 5px 20px;
+  margin: 30px auto;
+
+  &:hover {
+    background-color: #0376ff;
+    border: none;
+    color: #fff;
+  }
+`;
+
 const Index = () => {
   const [state, dispatch] = useContext(MetaMaskContext);
   const [snapState, setSnapState] = useState<KeyringState>(initialState);
@@ -47,12 +67,15 @@ const Index = () => {
   const [guardianId, setGuardianId] = useState<string | null>();
   const [accountAddress, setAccountAddress] = useState<string | null>();
   const [privateKey, setPrivateKey] = useState<string | null>();
+  const [feeToken, setFeeToken] = useState<string | null>(POLYGON_MUMBAI_USDC);
   const [salt, setSalt] = useState<string | null>();
   const [accountId, setAccountId] = useState<string | null>();
   const [accountObject, setAccountObject] = useState<string | null>();
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [accountAddrInput, setAccountAddrInput] = useState('');
   // UserOp method state
   const [chainConfig, setChainConfigObject] = useState<string | null>();
+  const [isErc20, setIsErc20] = useState(false);
 
   const client = new KeyringSnapRpcClient(snapId, window.ethereum);
 
@@ -95,7 +118,9 @@ const Index = () => {
     setAccountAddress(newAccount.address);
     // Review
     await window.ethereum.request({ method: 'eth_requestAccounts' });
-    return newAccount;
+    console.log('newAccount', newAccount);
+    setAccountObject(JSON.stringify(newAccount));
+    setAccountAddrInput(newAccount.address);
   };
 
   // UserOp methods (default to send from first AA account created)
@@ -217,13 +242,6 @@ const Index = () => {
       BiconomyImplementationAbi,
     );
 
-    // const setUpAndEnableModuleData = smartAccountInterface.encodeFunctionData(
-    //   'setUpAndEnableModule',
-    //   [ACCOUNT_RECOVERY_MODULE_ADDRESS, accountRecoverySetupData],
-    // );
-
-    // console.log('setUpAndEnableModuleData', setUpAndEnableModuleData);
-
     const smartAccount = new ethers.Contract(
       accounts[0],
       smartAccountInterface,
@@ -233,6 +251,26 @@ const Index = () => {
     await smartAccount.setupAndEnableModule(
       ACCOUNT_RECOVERY_MODULE_ADDRESS,
       accountRecoverySetupData,
+    );
+  };
+
+  const approveTokenPaymaster = async (erc20Address: string) => {
+    const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+    const signer = provider.getSigner();
+    const accounts: any = await ethereum.request({ method: 'eth_accounts' });
+    console.log('current account ', accounts[0]);
+
+    const erc20Interface = new ethers.utils.Interface(ERC20Abi);
+
+    const feeTokenContract = new ethers.Contract(
+      erc20Address,
+      erc20Interface,
+      signer,
+    );
+
+    await feeTokenContract.approve(
+      BICONOMY_ERC20_PAYMASTER_MULTICHAIN_ADDRESS,
+      ethers.constants.MaxUint256,
     );
   };
 
@@ -267,6 +305,7 @@ const Index = () => {
     const guardianIdComputed = ethers.utils.keccak256(signature);
     console.log('guardianIdComputed', guardianIdComputed);
     setGuardianId(guardianIdComputed);
+    return guardianIdComputed;
   };
 
   const handleConnectClick = async () => {
@@ -326,42 +365,24 @@ const Index = () => {
 
   const accountManagementMethods = [
     {
-      name: 'Create account',
-      description: 'Create a 4337 account with social recovery',
-      inputs: [
-        {
-          id: 'create-account-private-key',
-          title: 'Private key (optional)',
-          value: privateKey,
-          type: InputType.TextField,
-          placeholder:
-            'E.g. 0000000000000000000000000000000000000000000000000000000000000000',
-          onChange: (event: any) => setPrivateKey(event.currentTarget.value),
-        },
-      ],
-      action: {
-        callback: async () => await createAccount(),
-        label: 'Create Account',
-      },
-      successMessage: 'Smart Contract Account Created',
-    },
-    {
       name: 'Sign a Message by Guardian',
       description: 'Getting a Guardian Id',
       inputs: [
         {
           id: 'smart account address',
           title: "Friend's SA address",
-          value: accountAddress,
+          value: accountAddrInput,
           type: InputType.TextField,
           placeholder: 'E.g. 0x4E720e21D8BEFA24da71F2eacE864137e0166C6C',
           onChange: (event: any) =>
-            setAccountAddress(event.currentTarget.value),
+            setAccountAddrInput(event.currentTarget.value),
         },
       ],
       action: {
-        callback: async () =>
-          await signAndSetGuardianId(accountAddress as string),
+        callback: async () => {
+          const res = await signAndSetGuardianId(accountAddress as string);
+          return res;
+        },
         label: 'Onboard guardian',
       },
       successMessage: guardianId,
@@ -389,7 +410,7 @@ const Index = () => {
     //   },
     // },
     {
-      name: 'Setup Recovery',
+      name: 'Setup Recovery and deploy account',
       description: 'Setting up recovery on chain using set guardian',
       inputs: [
         {
@@ -417,6 +438,24 @@ const Index = () => {
     //   },
     // },
     {
+      name: 'Approve Token Paymaster',
+      // description: 'Approve Token Paymaster',
+      tokenPaymaster: {
+        id: 'ERC20 token address',
+        title: 'Fee token address',
+        value: feeToken,
+        placeholder: 'E.g. 0xdA5289fCAAF71d52a80A254da614a192b693e977',
+        setIsErc20: (event: any) => setIsErc20(event.target.checked),
+        isErc20,
+      },
+      action: {
+        callback: async () => await approveTokenPaymaster(feeToken as string),
+        label: 'Approve',
+        disabled: !isErc20,
+      },
+      successMessage: 'Sending UserOp to Approve token paymaster',
+    },
+    {
       name: 'Mint NFT',
       description: 'Mint NFT',
       action: {
@@ -425,21 +464,21 @@ const Index = () => {
       },
       successMessage: 'Sending UserOp to Mint an NFT',
     },
-    {
-      name: 'Mint NFT/Custom tx Experimental',
-      description: 'Mint NFT and pay with ERC20',
-      action: {
-        callback: async () => await mintNFTExperimental(),
-        label: 'Mint',
-      },
-      successMessage: 'Sending UserOp to Mint an NFT',
-    },
+    // {
+    //   name: 'Mint NFT/Custom tx Experimental',
+    //   description: 'Mint NFT and pay with ERC20',
+    //   action: {
+    //     callback: async () => await mintNFTExperimental(),
+    //     label: 'Mint',
+    //   },
+    //   successMessage: 'Sending UserOp to Mint an NFT',
+    // },
   ];
-
   return (
     <Container>
-      <CardContainer>
-        {!state.installedSnap && (
+      <BannerSection />
+      {!state.installedSnap && (
+        <CardContainer>
           <Card
             content={{
               title: 'Connect',
@@ -454,26 +493,12 @@ const Index = () => {
             }}
             disabled={!state.hasMetaMask}
           />
-        )}
-      </CardContainer>
+        </CardContainer>
+      )}
 
-      <StyledBox sx={{ flexGrow: 1 }}>
-        <Grid container spacing={4} columns={[1, 2, 3]}>
-          <Grid item xs={8} sm={4} md={2}>
-            {/* Your existing JSX */}
-            {/* Add the new JSX here */}
-            {guardianId && (
-              <div>
-                <p>Guardian ID: {guardianId}</p>
-              </div>
-            )}
-          </Grid>
-        </Grid>
-      </StyledBox>
-
-      <StyledBox sx={{ flexGrow: 1 }}>
-        <Grid container spacing={4} columns={[1, 2, 3]}>
-          <Grid item xs={8} sm={4} md={2}>
+      {accountAddress ? (
+        <>
+          <StyledBox sx={{ flexGrow: 1, maxWidth: 800, marginTop: 3 }}>
             {/* Not using this for now*/}
             {/* <DividerTitle>Options</DividerTitle>*/}
             {/* <Toggle*/}
@@ -486,12 +511,33 @@ const Index = () => {
             <DividerTitle>Methods</DividerTitle>
             <Accordion items={accountManagementMethods} />
             <Divider />
-            <DividerTitle>UserOp Methods</DividerTitle>
-            <Accordion items={userOpMethods} />
+            {/* <DividerTitle>UserOp Methods</DividerTitle>
+            <Accordion items={userOpMethods} /> */}
             <Divider />
-          </Grid>
-        </Grid>
-      </StyledBox>
+          </StyledBox>
+        </>
+      ) : (
+        <StyledBox sx={{ flexGrow: 1, maxWidth: 200 }}>
+          <MethodButton
+            // eslint-disable-next-line @typescript-eslint/no-misused-promises
+            onClick={async () => {
+              try {
+                await createAccount();
+              } catch (error: any) {
+                console.error(error);
+              }
+            }}
+          >
+            Create Account
+          </MethodButton>
+          {/* Add the new JSX here */}
+          {guardianId && (
+            <div>
+              <p>Guardian ID: {guardianId}</p>
+            </div>
+          )}
+        </StyledBox>
+      )}
     </Container>
   );
 };
