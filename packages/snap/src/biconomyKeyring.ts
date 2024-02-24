@@ -1,10 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable camelcase */
 import type { UserOpStatus } from '@biconomy-devx/account';
-import {
-  createSmartAccountClient,
-  PaymasterMode,
-} from '@biconomy-devx/account';
+import { PaymasterMode } from '@biconomy-devx/account';
 import {
   addHexPrefix,
   Address,
@@ -39,18 +36,9 @@ import {
 import { hexToBytes } from '@metamask/utils';
 import { Buffer } from 'buffer';
 import { ethers, HDNodeWallet, Mnemonic } from 'ethers';
-import { encode } from 'punycode';
 import { v4 as uuid } from 'uuid';
 import type { Hex } from 'viem';
-import {
-  createWalletClient,
-  encodeAbiParameters,
-  encodeFunctionData,
-  http,
-  parseAbiParameters,
-} from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygonMumbai } from 'viem/chains';
+import { encodeAbiParameters, parseAbiParameters } from 'viem';
 
 import { DEFAULT_AA_FACTORIES } from './constants/aa-factories';
 import {
@@ -75,6 +63,8 @@ import {
 } from './types';
 import { BiconomyAccountRecoveryAbi } from './utils/abi/BiconomyAccountRecoveryAbi';
 import { BiconomyImplementationAbi } from './utils/abi/BiconomyImplementationAbi';
+import { getBiconomySmartAccount } from './utils/biconomyAccount';
+import { getBundlerUrl } from './utils/chainConfig';
 import { getUserOperationHash } from './utils/ecdsa';
 import { getSigner, provider } from './utils/ethers';
 import {
@@ -193,6 +183,9 @@ export const promptUser = async (
 
 // This we should be able to source symbol or address from what's being set under gas settings on companion Dapp
 // Note: could be a mapping per chainId
+
+// Applies only for Mumbai
+// Todo: Get based on chainId
 const PREFERRED_FEE_TOKEN_ADDRESS =
   '0xdA5289fCAAF71d52a80A254da614a192b693e977';
 
@@ -203,7 +196,7 @@ export class BiconomyKeyring implements Keyring {
     this.#state = state;
   }
 
-  // custom methods
+  // ideas for custom methods
   // setAccountRecoveryExpermiental
   // sending custom transaction[] with useropDispatcher
   // issue session key
@@ -221,21 +214,12 @@ export class BiconomyKeyring implements Keyring {
       );
     }
 
-    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: polygonMumbai,
-      transport: http(),
-    });
+    const { chainId } = await provider.getNetwork();
 
-    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
-    const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
-      // index: // saltToInt
-    });
+    const smartAccount = await getBiconomySmartAccount(
+      Number(chainId),
+      wallet.privateKey as Hex,
+    );
 
     const userop = await smartAccount.buildUserOp([
       {
@@ -251,8 +235,6 @@ export class BiconomyKeyring implements Keyring {
       mode: PaymasterMode.ERC20,
       preferredToken: USDC_ADDRESS_MUMBAI,
     });
-
-    const { chainId } = await provider.getNetwork();
 
     const signer = getSigner(wallet.privateKey);
 
@@ -318,21 +300,12 @@ export class BiconomyKeyring implements Keyring {
       );
     }
 
-    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: polygonMumbai,
-      transport: http(),
-    });
+    const { chainId } = await provider.getNetwork();
 
-    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
-    const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
-      // index: // saltToInt
-    });
+    const smartAccount = await getBiconomySmartAccount(
+      Number(chainId),
+      wallet.privateKey as Hex,
+    );
 
     const { validUntil } = accountRecoverySettings;
     console.log('validUntil ', validUntil);
@@ -457,7 +430,7 @@ export class BiconomyKeyring implements Keyring {
       method: 'snap_getEntropy',
       params: {
         version: 1,
-        salt: 'smartaccountsnapbiconomy',
+        salt: 'bicoaasnap02',
       },
     });
   }
@@ -501,30 +474,18 @@ export class BiconomyKeyring implements Keyring {
       delete options.privateKey;
     }
 
-    const { chainId } = await provider.getNetwork();
-
-    // const chainConfig = this.#getChainConfig(Number(chainId));
-
-    const signerAccount = privateKeyToAccount(privateKey as Hex);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: polygonMumbai,
-      transport: http(),
-    });
-
     const random = ethers.toBigInt(ethers.randomBytes(32));
 
     const salt =
       (options.salt as string) ??
       ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [random]);
 
-    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
-    const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
-    });
+    const { chainId } = await provider.getNetwork();
+
+    const smartAccount = await getBiconomySmartAccount(
+      Number(chainId),
+      privateKey as Hex,
+    );
 
     const aaAddress = await smartAccount.getAccountAddress();
 
@@ -815,28 +776,11 @@ export class BiconomyKeyring implements Keyring {
     const wallet = this.#getWalletByAddress(address);
 
     const { chainId } = await provider.getNetwork();
-    const chainConfig = this.#getChainConfig(Number(chainId));
 
-    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: polygonMumbai,
-      transport: http(),
-    });
-
-    // If the salt was used to create an account, we would need the salt from the state.
-
-    // TODO: get bundlerUrl and paymasterApiKey from chainConfig
-    const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
-      // index: // saltToInt
-    });
-
-    const verifyingPaymasterAddress =
-      chainConfig?.customVerifyingPaymasterAddress;
+    const smartAccount = await getBiconomySmartAccount(
+      Number(chainId),
+      wallet.privateKey as Hex,
+    );
 
     const biconomyBaseUserOp = await smartAccount.buildUserOp([
       {
@@ -847,12 +791,17 @@ export class BiconomyKeyring implements Keyring {
       // paymasterServiceData
     ]);
 
-    // console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
+    console.log('biconomyBaseUserOp ', biconomyBaseUserOp);
 
     // TODO: things to discuss
     // 1. We do already have gas limits as this point
     // 2. paymasterAndData can be patched at this point for the verifying paymaster
     // 3. dummyPaymasterAndData is perhpas not necessary and can be sent 0x for using biconomy paymaster
+
+    const bundlerUrl = getBundlerUrl(Number(chainId));
+    if (bundlerUrl === '' || bundlerUrl === undefined) {
+      throw new Error('Bundler URL not found');
+    }
 
     const ethBaseUserOp: EthBaseUserOperation = {
       nonce: biconomyBaseUserOp?.nonce?.toString() ?? '0x00',
@@ -860,15 +809,9 @@ export class BiconomyKeyring implements Keyring {
       callData: biconomyBaseUserOp?.callData?.toString() ?? '0x',
       dummySignature:
         biconomyBaseUserOp?.signature?.toString() ?? DUMMY_SIGNATURE,
-      dummyPaymasterAndData:
-        '0x00000f7365ca6c59a2c93719ad53d567ed49c14c010000000000000000000000000000000000000000000000000000000065d84c650000000000000000000000000000000000000000000000000000000065d8455d000000000000000000000000da5289fcaaf71d52a80a254da614a192b693e97700000000000000000000000000000f7748595e46527413574a9327942e744e9100000000000000000000000000000000000000000000000000000000000f1cad00000000000000000000000000000000000000000000000000000000001053b0b392cdfaa75db4946e2a25f2826e66ac6f7486540c569de1e6cd6a51e1cf07cd1a96990127338121339b0b7496617dcadfd61f33e32e8312feb15e8f9c5fa3ef1c',
-      /* getDummyPaymasterAndData(
-        verifyingPaymasterAddress,
-      ),*/ // review
-      // TODO: use biconomy
-      bundlerUrl:
-        // 'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a',
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // chainConfig?.bundlerUrl ?? '',
+      dummyPaymasterAndData: getDummyPaymasterAndData(PaymasterMode.ERC20), // sufficient for SPONSORED as well
+      bundlerUrl,
+      // Can pass on gas limits
       /* gasLimits: {
         callGasLimit: biconomyBaseUserOp?.callGasLimit?.toString() ?? '0x0',
         verificationGasLimit:
@@ -887,25 +830,16 @@ export class BiconomyKeyring implements Keyring {
     userOp: EthUserOperation,
   ): Promise<EthUserOperationPatch> {
     console.log('patch userop called here ');
+    console.log('userOp coming from upstream ', userOp);
     const wallet = this.#getWalletByAddress(address);
 
-    const signerAccount = privateKeyToAccount(wallet.privateKey as Hex);
-    const client = createWalletClient({
-      account: signerAccount,
-      chain: polygonMumbai,
-      transport: http(),
-    });
+    const { chainId } = await provider.getNetwork();
 
-    console.log('userOp coming from upstream ', userOp);
+    const smartAccount = await getBiconomySmartAccount(
+      Number(chainId),
+      wallet.privateKey as Hex,
+    );
 
-    // TODO : make this a helper function or bring from the state if allowed
-    const smartAccount = await createSmartAccountClient({
-      signer: client,
-      bundlerUrl:
-        'https://bundler.biconomy.io/api/v2/80001/A5CBjLqSc.0dcbc53e-anPe-44c7-b22d-21071345f76a', // polygon mumbai fixed for now
-      biconomyPaymasterApiKey: 'EgSfqphAf.13b943b8-8a21-45ab-bd3b-f856a7569cb3', // placeholder
-      // index: // saltToInt
-    });
     console.log(
       'smartAccount address ',
       await smartAccount.getAccountAddress(),
