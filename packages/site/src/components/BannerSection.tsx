@@ -33,13 +33,13 @@ const SubTitle = styled.p`
 export const BannerSection = () => {
   return (
     <AccordionContainer>
-      <Title>Biconomy Smart Account Snap</Title>
+      <Title>Biconomy Smart Account</Title>
       <SubContainer>
         <SubTitle>
           Create and add a smart account to your metamask wallet.
         </SubTitle>
         <SubTitle style={{ marginBottom: 20 }}>
-          Pay for gas with ERC20 tokens. Use Metamask account 1 for account
+          Pay for gas with ERC20 tokens. Use an existing Metamask account for
           recovery.
         </SubTitle>
       </SubContainer>
