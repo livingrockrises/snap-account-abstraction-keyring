@@ -24,7 +24,7 @@ import {
 import { MetamaskActions, MetaMaskContext } from '../hooks';
 import { InputType } from '../types';
 import type { KeyringState } from '../utils';
-import { connectSnap, getSnap, isSynchronousMode } from '../utils';
+import { connectSnap, getSnap } from '../utils';
 import { BiconomyAccountRecoveryAbi } from '../utils/abi/BiconomyAccountRecoveryAbi';
 import { BiconomyImplementationAbi } from '../utils/abi/BiconomyImplementationAbi';
 import { ERC20Abi } from '../utils/abi/ERC20Abi';
@@ -90,12 +90,8 @@ const Index = () => {
         return;
       }
       const accounts = await client.listAccounts();
-      const pendingRequests = await client.listRequests();
-      const isSynchronous = await isSynchronousMode();
       setSnapState({
         accounts,
-        pendingRequests,
-        useSynchronousApprovals: isSynchronous,
       });
     }
 
@@ -321,16 +317,6 @@ const Index = () => {
       dispatch({ type: MetamaskActions.SetError, payload: error });
     }
   };
-
-  // Note: not using this for now
-  // const handleUseSyncToggle = useCallback(async () => {
-  //   console.log('Toggling synchronous approval');
-  //   await toggleSynchronousApprovals();
-  //   setSnapState({
-  //     ...snapState,
-  //     useSynchronousApprovals: !snapState.useSynchronousApprovals,
-  //   });
-  // }, [snapState]);
 
   const userOpMethods = [
     {
